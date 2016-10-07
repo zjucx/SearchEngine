@@ -32,12 +32,26 @@ func (bt *BTree) Insert(key int, value string) {
 }
 
 func (bt *BTree) Search(key int) (string, bool) {
+
+}
+
+func search(n node, key int) (*kv, int, *leafNode) {
   curr := bt.root
+  index := -1
   for {
     switch t := curr.(type) {
     case *leafNode:
+      i, ok := t.find(key)
+      if !ok {
+        return "", index, t
+      }
+      return t.kvs[i].value, index, t
     case *interNode:
-      curr = t.
+      i, _ = t.find(key)
+      index = i
+      curr = t.kcs[i].child
+    default:
+      panic("")
     }
   }
 }
