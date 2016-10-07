@@ -4,20 +4,14 @@ import (
   "fmt"
 )
 
-func newLeafNode(p *interNode) *leafNode {
-  return &leafNode{
-    parent : p,
-    count : 1,
-  }
+type BTree struct {
+  root *interNode
+  frist *leafNode
+  leafCount int
+  interCount int
+  height int
 }
 
-func newInterNode(p *interNode, largestChild node) *interNode {
-  return &interNode{
-    parent : p,
-    count : 1,
-    kcs[0].child : largestChild != nil ? largestChild : nil,
-  }
-}
 func newBTree() *BTree {
   leaf := newLeafNode(nil)
   r := newInterNode(nil, leaf)
@@ -38,5 +32,12 @@ func (bt *BTree) Insert(key int, value string) {
 }
 
 func (bt *BTree) Search(key int) (string, bool) {
-
+  curr := bt.root
+  for {
+    switch t := curr.(type) {
+    case *leafNode:
+    case *interNode:
+      curr = t.
+    }
+  }
 }
