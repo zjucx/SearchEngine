@@ -28,11 +28,21 @@ func newBTree() *BTree {
 
 
 func (bt *BTree) Insert(key int, value string) {
-
+  _, index, l := search(bt.root, key)
+  _, ok := l.Insert(key, value)
+  if !ok {
+    return
+  }
+  var midNode node
+  
 }
 
 func (bt *BTree) Search(key int) (string, bool) {
-
+  kv, _, _ := search(bt.root, key)
+  if kv == nil {
+    return "", false
+  }
+  return kv.value, true
 }
 
 func search(n node, key int) (*kv, int, *leafNode) {

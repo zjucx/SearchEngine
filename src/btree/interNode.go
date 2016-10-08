@@ -19,6 +19,17 @@ func newInterNode(p *interNode, largestChild node) *interNode {
   }
 }
 
+func (in *interNode) Insert(key int, value string) (*interNode, int, bool) {
+  index, _ := find(key)
+  if !in.full() {
+    copy(in.kcs[index:], in.kcs[index+1 : count])
+    in.count++
+    return nil, key, false
+  }
+
+  
+}
+
 func (in *interNode) find(key int) (int, bool) {
   cmp := func (i int) bool {
     return in.kcs[i].key >= key
@@ -28,3 +39,7 @@ func (in *interNode) find(key int) (int, bool) {
 
   return i, true
 }
+
+func (in *interNode) parent() *interNode {return in.parent}
+func (in *interNode) setParent(in *interNode) {in.parent = in}
+func (in *interNode) full() bool {return in.count == MaxKC}
