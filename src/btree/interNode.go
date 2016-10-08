@@ -19,15 +19,37 @@ func newInterNode(p *interNode, largestChild node) *interNode {
   }
 }
 
-func (in *interNode) Insert(key int, value string) (*interNode, int, bool) {
+func (in *interNode) Insert(key int, value node) (*interNode, int, bool) {
   index, _ := find(key)
   if !in.full() {
-    copy(in.kcs[index:], in.kcs[index+1 : count])
+    copy(in.kcs[index+1:], in.kcs[index : count])
+    in.kcs[index].key = key
+    in.kcs[index].child = value
     in.count++
     return nil, key, false
   }
 
-  
+  newInter, k := split(in)
+
+  if key > k {
+    newInter.Insert(key, value)
+  } else {
+    in.Insert(key, value)
+  }
+  return newInter, k, true
+}
+
+func split(in  *interNode) (*interNode, int) {
+  midIndex := MaxKC/2
+  newInter := &interNode{
+    count : midIndex,
+  }
+
+  copy(newInter.kcs[0:], in.kcs[midIndex:MaxKC])
+
+  newInter.count = MaxKC - midIndex
+
+  return newInter, newInter.kcs[0].key
 }
 
 func (in *interNode) find(key int) (int, bool) {

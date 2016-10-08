@@ -68,13 +68,14 @@ func (l *leafNode) Insert(key int, value string) (*leafNode, Key, bool) {
 
 func split(l *leafNode) (*leafNode, key) {
   midIndex := MaxKV/2
-  newLeaf := &leafNode{}
+  newLeaf := &leafNode{
+    count : MaxKV - midIndex,
+    next : l.next
+  }
 
   copy(newLeaf.kvs[0:], l.kvs[midIndex:MaxKV])
 
   l.count = midIndex
-  newLeaf.count = MaxKV - midIndex
-  newLeaf.next = l.next
   l.next = newLeaf
 
   return newLeaf, newLeaf.kvs[0].key
