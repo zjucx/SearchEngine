@@ -14,16 +14,23 @@ const (
 	tdata      uint8 = 1
 )
 
-type indexkv struct {
-  k [maxkeylen]byte  //key for
-  v *list      //the offset of key in data file offset+sizeof(uint32)
+type dictitem struct {
+  word [maxkeylen]byte
+  wordid uint32
 }
 
-type item struct {
-  k [maxkeylen]byte  //key for
-  count uint32       //count of docid for this key
-  offset uint32      //the offset of key in data file offset+sizeof(uint32)
+type indexitem struct {
+  wordid uint32
+  docid uint32
 }
+
+type index struct {
+  wordid uint32
+  count uint32
+  offset uint32     //the offset of key in data file offset+sizeof(uint32)
+}
+
+type dataitem uint32
 
 type page struct {
   pgid uint32
@@ -113,4 +120,40 @@ func (bt *BTreedb) checkmmap() error {
 
 	}
 	return nil
+}
+
+/**
+ * 判断文件是否存在  存在返回 true 不存在返回false
+ */
+func checkFileIsExist(filename string) (bool) {
+ var exist = true;
+ if _, err := os.Stat(filename); os.IsNotExist(err) {
+  exist = false;
+ }
+ return exist;
+}
+
+func writeDictFile(filename string, key []byte, value uint32) {
+  if checkFileIsExist(filename) {  //如果文件存在
+    f, _ = os.OpenFile(filename, os.O_APPEND, 0666)  //打开文件
+    fmt.Println("file exist!");
+   }else {
+    f, _ = os.Create(filename)  //创建文件
+    fmt.Println("file is not exist!");
+   }
+   /*strkey := []byte(key)
+   if len(key) > maxkeylen {
+     strkey = strings(key[0:maxkeylen-1])
+   }*/
+   strkey = strings(key)
+   strval := strconv.Itoa(value)
+   str := strings.Join({strkey, strval}, ",")
+   err := ioutil.WriteFile(filename, str, 0666)  //写入文件(字节数组)
+   if !err {
+     fmt.Println("write file error!");
+   }
+}
+
+func loadDictFile(filename string) map[string]uint32 {
+  dict := make(map[string]uint32)
 }
