@@ -39,4 +39,19 @@ type index struct {
   pg *page
 }
 
-func (idx *index)
+func quickSort(idx []int, s, t int) {
+  m := split()
+  quickSort(idx, s, m-1)
+  quickSort(idx, m+1, t)
+}
+
+func split(idx []int, s, t int) int {
+  for i, j:= s; i < t; i++ {
+    if idx[i] < idx[t] {
+      swap(idx[i], idx[j])
+      j++
+    }
+  }
+  swap(idx[j], idx[t])
+  return j
+}
