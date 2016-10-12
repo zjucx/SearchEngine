@@ -34,24 +34,26 @@ type page struct {
 
 //index
 type index struct {
-  dict *dictionary
-  tmpidxptr uintptr
+  tmpidxptr *tmpindex
   pg *page
 }
 
-func quickSort(idx []int, s, t int) {
+func (idx *index)quickSort(idx []int, s, t int) {
   m := split()
   quickSort(idx, s, m-1)
   quickSort(idx, m+1, t)
 }
 
-func split(idx []int, s, t int) int {
+func (idx *index)split(idx []int, s, t int) int {
   for i, j:= s; i < t; i++ {
     if idx[i] < idx[t] {
-      swap(idx[i], idx[j])
+      idx.swap(i, j)
       j++
     }
   }
-  swap(idx[j], idx[t])
+  swap(idx+j, idx+t)
   return j
+}
+func (idx *index)swap(i, j int) {
+  idx.tmpidxptr[i], idx.tmpidxptr[j] = idx.tmpidxptr[j], idx.tmpidxptr[i]
 }
