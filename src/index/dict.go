@@ -6,15 +6,6 @@ import (
   "bufio"
 )
 
-const maxbufsize = 4096
-
-type tmpIndex struct {
-  buf [maxbufsize]byte		/* 输入缓冲区 */
-  length int		/* 缓冲区当前有多少个数 */
-  offset int	/* 缓冲区读到了文件的哪个位置 */
-  idx int		/* 缓冲区的指针 */
-}
-
 type dictionary struct {
   dict map[string]int
   curSize int
@@ -22,23 +13,6 @@ type dictionary struct {
   writer *bufio.Writer
 
 }
-
-func (index *tmpIndex) addIndexItem(d *dictionary, key string, docid int) {
-  wrdid := d.getWordValue(key)
-  if (offset + 8 >= maxbufsize {
-    d.writer.Write(index.buf)
-    offset = 0
-  }
-
-  wrdbuf = bytes.NewBuffer([]byte{})
-  docbuf = bytes.NewBuffer([]byte{})
-  binary.Write(wrdbuf, binary.BigEndian, wrdid)
-  binary.Write(docbuf, binary.BigEndian, docid)
-  copy(index.buf[offset:], wrdbuf)
-  copy(index.buf[offset:], docbuf)
-  offset += 8
-}
-
 
 func (d *dictionary)getWordValue(key string) int {
   // 查找键值是否存在

@@ -11,19 +11,8 @@ const (
 	tdata      uint8 = 1
 )
 
-/*
- * the final index file(.index) and the data file (.data)'s data
- * orgnized by page
- */
-type page struct {
-  pgid uint32
-  nextid uint32
-  preid uint32
-  pgtype uint8       //dacid data page and index page
-  curSize uint32
-  data uintptr      //save data for docid or index page
-}
-
+const maxbufsize = 4096
+const K = 64
 /*
  * the tmp index file(.tmp) 's data orgnized by
  */
@@ -57,3 +46,4 @@ func (idx *index)split(idx []int, s, t int) int {
 func (idx *index)swap(i, j int) {
   idx.tmpidxptr[i], idx.tmpidxptr[j] = idx.tmpidxptr[j], idx.tmpidxptr[i]
 }
+func (a *kvs) Less(i, j int) bool { return a[i].key < a[j].key }
