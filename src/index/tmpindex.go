@@ -93,6 +93,58 @@ func (idx *tmpIndexBuf) Less(i, j int) bool {
   return false
 }
 
+func (idx *tmpIndex) sortTmpIndexFile(filename string) {
+  f, e := os.Stat(filename)
+	if e != nil {
+		return
+	}
+  //file size
+  filesize := f.Size()
+  numFile = 1;
+  //the number of bufs to load the file
+  runNum := filesize / maxbufsize
+  //leftBuf := filesize % maxbufsize*K
+  fi, err := os.Open(filename)
+  if err != nil {
+    panic(err)
+  }
+  defer fi.Close()
+  bfRd := bufio.NewReader(fi)
+
+  for runNum {
+    //N bufs can merge to one file
+    runNum = runNum / N
+    if runNum % N {
+      runNum++
+    }
+
+    for i := 0; i < runNum; i++ {
+      if i == runNum-1 && runNum % N {
+        needMerge := runNum % N
+      } else {
+        needMerge := K
+      }
+      // read buf from file if numFile == 1 read from original file
+      // else from tmp index files
+      for j := 0; j < needMerge; j++ {
+        if numFile == 1 {
+          n, err := bfRd.Read(idx.buf)
+        } else {
+          snprintf(filename, 20, "%s%d.dat", input_prefix, i*K+j);
+          fi, err := os.Open(filename)
+          if err != nil {
+            panic(err)
+          }
+          defer fi.Close()
+          bfRd := bufio.NewReader(fi)
+        }
+      }
+    }
+    numFile = 0
+  }
+  for
+}
+
 func (idx *tmpIndex) merge() {
   idx.buildLoseTree()
 }
