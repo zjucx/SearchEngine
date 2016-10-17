@@ -124,11 +124,14 @@ func (idx *tmpIndex) sortTmpIndexFile(filename string) {
       } else {
         needMerge := K
       }
+
       // read buf from file if numFile == 1 read from original file
       // else from tmp index files
       for j := 0; j < needMerge; j++ {
         if numFile == 1 {
-          n, err := bfRd.Read(idx.buf)
+          bytes, err := bfRd.Read(idx.bufs[j].buf)
+          idx.bufs[j].length = n / Size(int)
+          idx.bufs[j].offset = bytes
         } else {
           snprintf(filename, 20, "%s%d.dat", input_prefix, i*K+j);
           fi, err := os.Open(filename)
@@ -136,8 +139,12 @@ func (idx *tmpIndex) sortTmpIndexFile(filename string) {
             panic(err)
           }
           defer fi.Close()
-          bfRd := bufio.NewReader(fi)
+          bfR := bufio.NewReader(fi)
+          bytes, err := bfRd.Read(idx.bufs[j].buf)
+          idx.bufs[j].length = n / Size(int)
+          idx.bufs[j].offset = bytes
         }
+
       }
     }
     numFile = 0
