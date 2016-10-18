@@ -24,7 +24,6 @@ type item struct {
  */
  type tmpIndexBuf struct {
    buf [maxbufsize]byte		/* 输入缓冲区 */
-   tmpidxptr *item
    length int		/* 缓冲区当前有多少个数 */
    offset int	/* 缓冲区读到了文件的哪个位置 */
    idx int		/* 缓冲区的指针 */
@@ -35,8 +34,9 @@ type item struct {
   */
 type tmpIndex struct {
   k int
-  bufs [K]tmpIndexBuf
   ls [K]int
+  bufs [K]tmpIndexBuf
+  bufo tmpIndexBuf
 }
 
 func (idx *tmpIndexBuf) addIndexItem(d *dictionary, key string, docid int) {
@@ -93,6 +93,20 @@ func (idx *tmpIndexBuf) Less(i, j int) bool {
   return false
 }
 
+func (idx *tmpIndex)readDataFromFile(offset int) int{
+  snprintf(filename, 20, "%s%d.dat", input_prefix, i*K+j);
+  fi, err := os.Open(filename)
+  if err != nil {
+    panic(err)
+  }
+  defer fi.Close()
+  bfR := bufio.NewReader(fi)
+  _, _ := fi.Seek(offset, 0)
+  bytes, err := bfRd.Read(idx.bufs[j].buf)
+  idx.bufs[j].length = bytes / Size(int)
+  return bytes
+}
+
 func (idx *tmpIndex) sortTmpIndexFile(filename string) {
   f, e := os.Stat(filename)
 	if e != nil {
@@ -120,9 +134,9 @@ func (idx *tmpIndex) sortTmpIndexFile(filename string) {
 
     for i := 0; i < runNum; i++ {
       if i == runNum-1 && runNum % N {
-        needMerge := runNum % N
+        idx.k = runNum % N
       } else {
-        needMerge := K
+        idx.k = K
       }
 
       // read buf from file if numFile == 1 read from original file
@@ -130,30 +144,52 @@ func (idx *tmpIndex) sortTmpIndexFile(filename string) {
       for j := 0; j < needMerge; j++ {
         if numFile == 1 {
           bytes, err := bfRd.Read(idx.bufs[j].buf)
-          idx.bufs[j].length = n / Size(int)
-          idx.bufs[j].offset = bytes
+          idx.bufs[j].length = bytes / Size(int)
         } else {
-          snprintf(filename, 20, "%s%d.dat", input_prefix, i*K+j);
-          fi, err := os.Open(filename)
-          if err != nil {
-            panic(err)
-          }
-          defer fi.Close()
-          bfR := bufio.NewReader(fi)
-          bytes, err := bfRd.Read(idx.bufs[j].buf)
-          idx.bufs[j].length = n / Size(int)
-          idx.bufs[j].offset = bytes
+          bytes := idx.readDataFromFile(0)
         }
-
+        idx.bufs[j].offset = bytes
+        idx.bufs[j].idx = 0
       }
+      merge(i)
     }
     numFile = 0
   }
-  for
 }
 
-func (idx *tmpIndex) merge() {
+func (idx *tmpIndex) merge(int curNum) {
   idx.buildLoseTree()
+  var filename string
+  snprintf(filename, 100, "%s%d.dat", output_prefix, n_merge)
+  fo, _ := os.Create(filename)  //创建文件
+
+  fmt.Println("file is not exist!");
+  k := idx.k
+  for k {
+    mr := idx.bufs[idx.ls[0]]
+    idx.bufo.buf[idx.bufo.idx++] = mr.buf[mr.idx++]
+
+    //output buf is full
+    if idx.bufo.idx == maxbufsize {
+      idx.bufo.idx = 0
+      //write to file
+    }
+
+    //input buf is full
+    if mr.idx == mr.length {
+      //read data from file until file EOF
+      bytes := idx.readDataFromFile(mr.offset)
+      if bytes == 0 {
+        k--
+      } else {
+        mr.offset += bytes
+        mr.idx = 0
+      }
+    }
+    idx.adjust(idx.ls[0])
+  }
+  //write left data to file
+  //bytes = write(output_fd, buffer, bp*4)
 }
 
 func (idx *tmpIndex) buildLoseTree() {
