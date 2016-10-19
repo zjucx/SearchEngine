@@ -1,5 +1,5 @@
 package page
-
+/*  for later use
 import (
   "fmt"
   "unsafe"
@@ -52,7 +52,7 @@ func (p *page) insertItem(i indexkv) bool {
 
 }
 
-func (bt *BTreedb) Newpage( /*parent, pre *page*/ parentid, preid uint32, pagetype uint8) (*page, *page, *page) {
+func (bt *BTreedb) Newpage( parentid, preid uint32, pagetype uint8) (*page, *page, *page) {
 
 	if bt.checkmmap() != nil {
 		fmt.Printf("check error \n")
@@ -109,7 +109,7 @@ func (bt *BTreedb) checkmmap() error {
 		maxpgid := bt.meta.maxpgid
 		syscall.Munmap(bt.mmapbytes)
 		//fmt.Printf(".meta.maxpgid:%v\n",bt.meta.maxpgid)
-		bt.mmapbytes, err = syscall.Mmap(int(bt.fd.Fd()), 0, int(int64( /*bt.meta.maxpgid*/ maxpgid+1)*pagesize), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
+		bt.mmapbytes, err = syscall.Mmap(int(bt.fd.Fd()), 0, int(int64( maxpgid+1)*pagesize), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 
 		if err != nil {
 			fmt.Printf("MAPPING ERROR  %v \n", err)
@@ -121,3 +121,4 @@ func (bt *BTreedb) checkmmap() error {
 	}
 	return nil
 }
+*/
