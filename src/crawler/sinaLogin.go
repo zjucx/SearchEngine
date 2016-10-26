@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"net/url"
 	"os"
-  "regexp"
   "encoding/json"
   "bufio"
   "strconv"
@@ -28,7 +27,7 @@ var header = map[string]string{
   "Content-Type":              "application/x-www-form-urlencoded",
 }
 
-func WeiboLogin(username, passwd string){
+func WeiboLogin(username, passwd string) string{
   //get cookie for sina website
   strCookies := getCookies()
   // crypto username for logining
@@ -51,17 +50,18 @@ func WeiboLogin(username, passwd string){
   loginUrl := `http://login.sina.com.cn/sso/login.php?client=ssologin.js(v1.4.18)`
   // form data params
   strParams := buildParems(su, sp, cgi, loginInfo)
-  loginResp, loginCookies := DoRequest(`POST`, loginUrl, strParams, strCookies, ``, header)
+  _, loginCookies := DoRequest(`POST`, loginUrl, strParams, strCookies, ``, header)
+  //loginResp, loginCookies := DoRequest(`POST`, loginUrl, strParams, strCookies, ``, header)
   //请求passport
-	passportResp, _ := callPassport(loginResp, strCookies+";"+loginCookies)
-	uniqueid := MatchData(passportResp, `"uniqueid":"(.*?)"`)
-	homeUrl := "http://weibo.com/u/" + uniqueid + "/home?topnav=1&wvr=6"
+	//passportResp, _ := callPassport(loginResp, strCookies+";"+loginCookies)
+  //fmt.Println(passportResp)
+	//uniqueid := MatchData(passportResp, `"uniqueid":"(.*?)"`)
+	//homeUrl := "http://weibo.com/u/" + uniqueid + "/home?topnav=1&wvr=6"
 
 	//进入个人主页
-	entryHome(homeUrl, loginCookies)
+	//entryHome(homeUrl, loginCookies)
 	//抓取个首页
-	//result := getPage(loginCookies)
-	//fmt.Println(result)
+	return loginCookies
 }
 
 func inputcgi(inputDone chan string){
@@ -113,13 +113,11 @@ func getPreLogin(su string) map[string]interface{} {
   resBody, _ := DoRequest(`GET`, preLoginUrl, ``, ``, ``, nil)
   //use regex extra json string
   strLoginInfo := RegexFind(resBody, `\((.*?)\)`)
-  fmt.Println("======getPreLogin:" + strLoginInfo)
+  fmt.Println("======getPreLogin")
   //parse json str to map[string]string
   //json str 转map
 	var loginInfo map[string]interface{}
 	if err := json.Unmarshal([]byte(strLoginInfo), &loginInfo); err == nil {
-		fmt.Println("==============json str 转map=======================")
-		fmt.Println(loginInfo["pubkey"].(string))
     //return nil
 	}
   return loginInfo
@@ -163,46 +161,16 @@ func buildParems(su, sp, captcha string, loginInfo map[string]interface{}) strin
 
 //获取passport并请求
 func callPassport(resp, cookies string) (passresp, passcookies string) {
-  fmt.Println("======callPassport:" + resp)
+  fmt.Println("======callPassport")
 	//提取passport跳转地址
 	passportUrl := RegexFind(resp, `location.replace\(\'(.*?)\'\)`)
-  fmt.Println("======callPassport:" + passportUrl)
 	passresp, passcookies = DoRequest(`GET`, passportUrl, ``, cookies, ``, header)
 	return
 }
 
 //进入首页
 func entryHome(redirectUrl, cookies string) (homeResp, homeCookies string) {
-  fmt.Println("======entryHome" + redirectUrl + cookies)
+  fmt.Println("======entryHome: " + redirectUrl)
 	homeResp, homeCookies = DoRequest(`GET`, redirectUrl, ``, cookies, ``, header)
-	return
-}
-
-/*
- * @functional 正则表达式提取数据
- * @param string strText 输入文本
- * @param string strReg 正则表达式
- * @return string
- */
-func RegexFind(strText, strReg string) (result string) {
-	reg := regexp.MustCompile(strReg)
-	arrMatch := reg.FindAllStringSubmatch(strText, -1)
-	if len(arrMatch) > 0 {
-		result = arrMatch[0][1]
-	}
-	return
-}
-/**
- * @functional 正则表达式匹配数据
- * @string strText 源字符串
- * @string strReg 正则表达式
- * @return string
- */
-func MatchData(strText, strReg string) (result string) {
-	reg := regexp.MustCompile(strReg)
-	arrMatch := reg.FindAllStringSubmatch(strText, -1)
-	if len(arrMatch) > 0 {
-		result = arrMatch[0][1]
-	}
 	return
 }

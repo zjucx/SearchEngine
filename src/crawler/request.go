@@ -132,3 +132,33 @@ func appendCookies(strCookies, path, domain string) []*http.Cookie {
 	}
 	return cookies
 }
+
+/*
+ * @functional 正则表达式提取数据
+ * @param string strText 输入文本
+ * @param string strReg 正则表达式
+ * @return string
+ */
+func RegexFind(strText, strReg string) (result string) {
+	reg := regexp.MustCompile(strReg)
+	arrMatch := reg.FindAllStringSubmatch(strText, -1)
+	if len(arrMatch) > 0 {
+		result = arrMatch[0][1]
+	}
+	return
+}
+
+/**
+ * @functional 正则表达式匹配数据
+ * @string strText 源字符串
+ * @string strReg 正则表达式
+ * @return string
+ */
+func MatchData(strText, strReg string) (result string) {
+	reg := regexp.MustCompile(strReg)
+	arrMatch := reg.FindAllStringSubmatch(strText, -1)
+	if len(arrMatch) > 0 {
+		result = arrMatch[0][1]
+	}
+	return
+}
