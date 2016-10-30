@@ -9,13 +9,14 @@ import (
   "strings"
   "github.com/yanyiwu/gojieba"
   "regexp"
+  "index"
 )
 
 func Segment(){
-  getFilelist("./tmp", segLine)
+  segment("./tmp", segLine)
 }
 
-func getFilelist(path string, sego func(string)) {
+func segment(path string, sego func(string)) {
   err := filepath.Walk(path, func(path string, fi os.FileInfo, err error) error {
     if ( fi == nil ) {return err}
     if fi.IsDir() {return nil}
@@ -51,7 +52,16 @@ func segLine(line string) {
   words = x.Cut(line, use_hmm)
   //fmt.Println(line)
   fmt.Println("精确模式:", strings.Join(words, "/"))
+
+  //build dict for index
+  dict := Dictionary(
+    filename : "./index/dict.dct"
+  )
+
+  dict.LoadDictFile()
+
   for i, v := range words {
     //build dictory
+    if dict.AddDict(v)
   }
 }
