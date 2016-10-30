@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-		//scrawler.Scrawler("xxxxxxx@163.com", "xxxxx")
+		//scrawler.Scrawler("xxxxxxx@163.com", "xxxxxxx")
 		segment.Segment()
 		//scrawler.Scrawler()
 }
