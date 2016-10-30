@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"segment"
+	//"invertidx"
 )
 
 func main() {

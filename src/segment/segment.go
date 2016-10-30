@@ -9,7 +9,7 @@ import (
   "strings"
   "github.com/yanyiwu/gojieba"
   "regexp"
-  "index"
+  "invertidx"
 )
 
 func Segment(){
@@ -54,9 +54,9 @@ func segLine(line string) {
   fmt.Println("精确模式:", strings.Join(words, "/"))
 
   //build dict for index
-  dict := Dictionary(
-    filename : "./index/dict.dct"
-  )
+  dict := Dictionary{
+    filename : "./index/dict.dct",
+  }
 
   dict.LoadDictFile()
 
