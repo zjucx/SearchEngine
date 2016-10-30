@@ -27,6 +27,7 @@ type item struct {
    length int		/* 缓冲区当前有多少个数 */
    offset int	/* 缓冲区读到了文件的哪个位置 */
    idx int		/* 缓冲区的指针 */
+   filename string
  }
 
  /*
@@ -39,11 +40,10 @@ type Index struct {
   bufo IndexBuf
 }
 
-func (idx *IndexBuf) addIndexItem(d *dictionary, key string, docid int) {
-  wrdid := d.getWordValue(key)
-  if (offset + 8 >= maxbufsize {
-    d.writer.Write(index.buf)
-    offset = 0
+func (idx *IndexBuf) addIndexItem(docid, wordid int) {
+
+  if (offset + size(item) >= maxbufsize {
+    idx.Flush()
   }
 
   wrdbuf = bytes.NewBuffer([]byte{})
@@ -52,9 +52,20 @@ func (idx *IndexBuf) addIndexItem(d *dictionary, key string, docid int) {
   binary.Write(docbuf, binary.BigEndian, docid)
   copy(idx.buf[offset:], wrdbuf)
   copy(idx.buf[offset:], docbuf)
-  offset += 8
+  offset += size(item)
 }
 
+func (idx *IndexBuf) flush(){
+  //open file and write to file
+  f, err := OpenFile(idx.filename)
+  CheckErr(err)
+  bw := bufio.NewWriter(f)
+  idx.quicksort(0, idx.offset/size(item))
+  bw.Write(index.buf)
+  bw.Flush()
+  //reset var
+  offset = 0
+}
  /*
   * the mian enter of algorithm of quicksort
   */
@@ -70,19 +81,19 @@ func (idx *IndexBuf)quickSort(s, t int) {
  */
 func (idx *IndexBuf)split(idx []int, s, t int) int {
   for i, j:= s; i < t; i++ {
-    if idx.Less(i, t) {
-      idx.Swap(i, j)
+    if idx.less(i, t) {
+      idx.swap(i, j)
       j++
     }
   }
-  idx.Swap(j, t)
+  idx.swap(j, t)
   return j
 }
-func (idx *IndexBuf) Swap(i, j int) {
+func (idx *IndexBuf) swap(i, j int) {
   ptr := (*item)(unsafe.Pointer(idx.buf))
   ptr[i], ptr[j] = ptr[j], ptr[i]
 }
-func (idx *IndexBuf) Less(i, j int) bool {
+func (idx *IndexBuf) less(i, j int) bool {
   ptr := (*item)(unsafe.Pointer(idx.buf))
   if ptr[i].wordid < ptr[j].wordid {
     return true

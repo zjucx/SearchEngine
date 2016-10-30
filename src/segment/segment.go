@@ -62,6 +62,6 @@ func segLine(line string) {
 
   for i, v := range words {
     //build dictory
-    if dict.AddDict(v)
+    v := dict.AddDict(v)
   }
 }
