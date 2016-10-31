@@ -3,7 +3,9 @@ package invertidx
 import (
   "fmt"
   "unsafe"
-  "container/list"
+  "bufio"
+  "os"
+  //"encoding/binary"
 )
 
 const (
@@ -14,16 +16,16 @@ const (
 const K = 64
 const maxbufsize = 4096
 
-type item struct {
-  wordid    int
-  docid     int
+type Item struct {
+  docid     uint32
+  wordid    uint32
 }
 
 /*
  * the tmp index file(.tmp) 's data orgnized by
  */
  type IndexBuf struct {
-   buf [maxbufsize]byte		/* 输入缓冲区 */
+   buf []byte		/* 输入缓冲区 */
    length int		/* 缓冲区当前有多少个数 */
    offset int	/* 缓冲区读到了文件的哪个位置 */
    idx int		/* 缓冲区的指针 */
@@ -41,18 +43,21 @@ type Index struct {
 }
 
 func (idx *IndexBuf) addIndexItem(docid, wordid int) {
-
-  if (offset + size(item) >= maxbufsize {
-    idx.Flush()
+  item := Item {
+    docid : uint32(docid),
+    wordid : uint32(wordid),
   }
 
-  wrdbuf = bytes.NewBuffer([]byte{})
-  docbuf = bytes.NewBuffer([]byte{})
-  binary.Write(wrdbuf, binary.BigEndian, wrdid)
-  binary.Write(docbuf, binary.BigEndian, docid)
-  copy(idx.buf[offset:], wrdbuf)
-  copy(idx.buf[offset:], docbuf)
-  offset += size(item)
+  l := unsafe.Sizeof(item)
+  pb := (*[]byte)(unsafe.Pointer(&item))
+
+  if idx.offset + int(l) >= maxbufsize {
+    idx.flush()
+  }
+
+  //binary.Write(&idx.buf[idx.offset], binary.BigEndian, item)
+  copy(*(*[]byte)(unsafe.Pointer(&idx.buf[idx.offset])), (*pb)[:l])
+  idx.offset += int(unsafe.Sizeof(item))
 }
 
 func (idx *IndexBuf) flush(){
@@ -60,27 +65,28 @@ func (idx *IndexBuf) flush(){
   f, err := OpenFile(idx.filename)
   CheckErr(err)
   bw := bufio.NewWriter(f)
-  idx.quicksort(0, idx.offset/size(item))
-  bw.Write(index.buf)
+  idx.quickSort(0, idx.offset/int(unsafe.Sizeof(&Item{})))
+  bw.Write(idx.buf)
   bw.Flush()
   //reset var
-  offset = 0
+  idx.offset = 0
 }
  /*
   * the mian enter of algorithm of quicksort
   */
 func (idx *IndexBuf)quickSort(s, t int) {
-  m := idx.split()
+  m := idx.split(s, t)
   for s > t {
-    idx.quickSort(idx, s, m-1)
-    idx.quickSort(idx, m+1, t)
+    idx.quickSort(s, m-1)
+    idx.quickSort(m+1, t)
   }
 }
 /*
  * the split part of algorithm of quicksort
  */
-func (idx *IndexBuf)split(idx []int, s, t int) int {
-  for i, j:= s; i < t; i++ {
+func (idx *IndexBuf)split(s, t int) int {
+  var j int
+  for i, j := s, s; i < t; i++ {
     if idx.less(i, t) {
       idx.swap(i, j)
       j++
@@ -90,33 +96,34 @@ func (idx *IndexBuf)split(idx []int, s, t int) int {
   return j
 }
 func (idx *IndexBuf) swap(i, j int) {
-  ptr := (*item)(unsafe.Pointer(idx.buf))
-  ptr[i], ptr[j] = ptr[j], ptr[i]
+  ptr := (*[]Item)(unsafe.Pointer(&idx.buf))
+  (*ptr)[i], (*ptr)[j] = (*ptr)[j], (*ptr)[i]
 }
 func (idx *IndexBuf) less(i, j int) bool {
-  ptr := (*item)(unsafe.Pointer(idx.buf))
-  if ptr[i].wordid < ptr[j].wordid {
+  ptr := (*[]Item)(unsafe.Pointer(&idx.buf))
+  if (*ptr)[i].wordid < (*ptr)[j].wordid {
     return true
   }
 
-  if ptr[i].docid < ptr[j].docid {
+  if (*ptr)[i].docid < (*ptr)[j].docid {
     return true
   }
 
   return false
 }
 
-func (idx *Index)readDataFromFile(offset int) int{
-  snprintf(filename, 20, "%s%d.dat", input_prefix, i*K+j);
+func (idx *Index)readDataFromFile(offset, bufIdx int) int{
+  //snprintf(filename, 20, "%s%d.dat", input_prefix, i*K+j);
+  filename := fmt.Sprintf("a %s", "string")
   fi, err := os.Open(filename)
   if err != nil {
     panic(err)
   }
   defer fi.Close()
-  bfR := bufio.NewReader(fi)
-  _, _ := fi.Seek(offset, 0)
-  bytes, err := bfRd.Read(idx.bufs[j].buf)
-  idx.bufs[j].length = bytes / Size(int)
+  bfRd := bufio.NewReader(fi)
+  fi.Seek(int64(offset), 0)
+  bytes, err := bfRd.Read(idx.bufs[bufIdx].buf)
+  idx.bufs[bufIdx].length = bytes / Size(int)
   return bytes
 }
 
@@ -159,7 +166,7 @@ func (idx *Index) sortIndexFile(filename string) {
           bytes, err := bfRd.Read(idx.bufs[j].buf)
           idx.bufs[j].length = bytes / Size(int)
         } else {
-          bytes := idx.readDataFromFile(0)
+          bytes := idx.readDataFromFile(0, j)
         }
         idx.bufs[j].offset = bytes
         idx.bufs[j].idx = 0
@@ -180,8 +187,9 @@ func (idx *Index) merge(int curNum) {
   k := idx.k
   for k {
     mr := idx.bufs[idx.ls[0]]
-    idx.bufo.buf[idx.bufo.idx++] = mr.buf[mr.idx++]
-
+    idx.bufo.buf[idx.bufo.idx] = mr.buf[mr.idx]
+    idx.bufo.idx++
+    mr.idx++
     //output buf is full
     if idx.bufo.idx == maxbufsize {
       idx.bufo.idx = 0
@@ -191,7 +199,7 @@ func (idx *Index) merge(int curNum) {
     //input buf is full
     if mr.idx == mr.length {
       //read data from file until file EOF
-      bytes := idx.readDataFromFile(mr.offset)
+      bytes := idx.readDataFromFile(mr.offset, idx.ls[0])
       if bytes == 0 {
         k--
       } else {

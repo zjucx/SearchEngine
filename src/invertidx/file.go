@@ -1,18 +1,12 @@
 package invertidx
 
 import (
-  "fmt"
+  //"fmt"
   "os"
-  "bufio"
 )
-func OpenFile(filename string) (*File) {
+func OpenFile(filename string) (*os.File, error) {
   f, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0660)
-  if err != nil {
-      b.Error("Open file error")
-      return nil
-  }
-  //defer f.Close()
-  return f
+  return f, err
 }
 
 func CheckErr(err error) {
