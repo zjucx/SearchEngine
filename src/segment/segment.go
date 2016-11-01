@@ -54,14 +54,12 @@ func segLine(line string) {
   fmt.Println("精确模式:", strings.Join(words, "/"))
 
   //build dict for index
-  dict := Dictionary{
-    filename : "./index/dict.dct",
-  }
+  dict := invertidx.NewDict("./index/dict.dct")
 
-  dict.LoadDictFile()
 
-  for i, v := range words {
+  for _, v := range words {
     //build dictory
     v := dict.AddDict(v)
+    fmt.Println(v)
   }
 }

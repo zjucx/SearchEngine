@@ -112,9 +112,7 @@ func (idx *IndexBuf) less(i, j int) bool {
   return false
 }
 
-func (idx *Index)readDataFromFile(offset, bufIdx int) int{
-  //snprintf(filename, 20, "%s%d.dat", input_prefix, i*K+j);
-  filename := fmt.Sprintf("a %s", "string")
+func (idx *Index)readDataFromFile(filename string, offset, bufIdx int) int{
   fi, err := os.Open(filename)
   if err != nil {
     panic(err)
@@ -123,7 +121,7 @@ func (idx *Index)readDataFromFile(offset, bufIdx int) int{
   bfRd := bufio.NewReader(fi)
   fi.Seek(int64(offset), 0)
   bytes, err := bfRd.Read(idx.bufs[bufIdx].buf)
-  idx.bufs[bufIdx].length = bytes / Size(int)
+  idx.bufs[bufIdx].length = bytes / int(unsafe.Sizeof(&Item{}))
   return bytes
 }
 
@@ -134,9 +132,9 @@ func (idx *Index) sortIndexFile(filename string) {
 	}
   //file size
   filesize := f.Size()
-  numFile = 1;
+  //numFile = 1;
   //the number of bufs to load the file
-  runNum := filesize / maxbufsize
+  runNum := int(filesize / maxbufsize)
   //leftBuf := filesize % maxbufsize*K
   fi, err := os.Open(filename)
   if err != nil {
@@ -145,47 +143,57 @@ func (idx *Index) sortIndexFile(filename string) {
   defer fi.Close()
   bfRd := bufio.NewReader(fi)
 
-  for runNum {
+  //file name format  loopidx+mergeidx.tindex
+  //the frist loop will generite file which the name prefix is 1i.tindex
+  //the second loop is 2i.tindex
+  prefix := 1;
+
+  for runNum > 0 {
     //N bufs can merge to one file
-    runNum = runNum / N
-    if runNum % N {
+    runNum = runNum / K
+    if runNum % K > 0{
       runNum++
     }
 
     for i := 0; i < runNum; i++ {
-      if i == runNum-1 && runNum % N {
-        idx.k = runNum % N
+      if i == runNum-1 && runNum % K > 0 {
+        idx.k = runNum % K
       } else {
         idx.k = K
       }
 
       // read buf from file if numFile == 1 read from original file
       // else from tmp index files
-      for j := 0; j < needMerge; j++ {
-        if numFile == 1 {
+      for j := 0; j < idx.k; j++ {
+        var bytes int
+        if i == 1 {
           bytes, err := bfRd.Read(idx.bufs[j].buf)
-          idx.bufs[j].length = bytes / Size(int)
+          CheckErr(err)
+          idx.bufs[j].length = bytes / int(unsafe.Sizeof(&Item{}))
         } else {
-          bytes := idx.readDataFromFile(0, j)
+          filename := fmt.Sprintf("%d%d.tindex", prefix-1, i*K+j)
+          bytes = idx.readDataFromFile(filename, 0, j)
         }
         idx.bufs[j].offset = bytes
         idx.bufs[j].idx = 0
       }
-      merge(i)
+      idx.merge(prefix, i)
     }
-    numFile = 0
+    prefix++
   }
 }
 
-func (idx *Index) merge(int curNum) {
-  idx.buildLoseTree()
-  var filename string
-  snprintf(filename, 100, "%s%d.dat", output_prefix, n_merge)
+func (idx *Index) merge(prefix, curNum int) {
+  idx.buildLoseTree(idx.k)
+  //var filename string
+  filename := fmt.Sprintf("%d%d.tindex", prefix, curNum)
+  //snprintf(filename, 100, "%s%d.dat", output_prefix, n_merge)
   fo, _ := os.Create(filename)  //创建文件
+  bw := bufio.NewWriter(fo)
 
   fmt.Println("file is not exist!");
   k := idx.k
-  for k {
+  for k > 0 {
     mr := idx.bufs[idx.ls[0]]
     idx.bufo.buf[idx.bufo.idx] = mr.buf[mr.idx]
     idx.bufo.idx++
@@ -193,13 +201,15 @@ func (idx *Index) merge(int curNum) {
     //output buf is full
     if idx.bufo.idx == maxbufsize {
       idx.bufo.idx = 0
+      bw.Write(idx.bufo.buf)
       //write to file
     }
 
     //input buf is full
     if mr.idx == mr.length {
       //read data from file until file EOF
-      bytes := idx.readDataFromFile(mr.offset, idx.ls[0])
+      filename := fmt.Sprintf("%d%d.tindex", prefix-1, curNum*K+idx.ls[0])
+      bytes := idx.readDataFromFile(filename, mr.offset, idx.ls[0])
       if bytes == 0 {
         k--
       } else {
@@ -213,7 +223,7 @@ func (idx *Index) merge(int curNum) {
   //bytes = write(output_fd, buffer, bp*4)
 }
 
-func (idx *Index) buildLoseTree() {
+func (idx *Index) buildLoseTree(k int) {
   for i := 0; i < k; i++ {
     idx.ls[i] = -1
   }
@@ -228,10 +238,10 @@ func (idx *Index) adjust(s int) {
     if s == -1 {
       break
     }
-    if (t == -1 || idx.bufs[s].tmpidxptr[offset] > idx.bufs[t].tmpidxptr[offset]) {
-      s, ls[t] = ls[t], s
+    if (t == -1 || (*(*Item)(unsafe.Pointer(&idx.bufs[s].buf[idx.bufs[s].offset]))).wordid > (*(*Item)(unsafe.Pointer(&idx.bufs[t].buf[idx.bufs[t].offset]))).wordid) {
+      s, idx.ls[t] = idx.ls[t], s
     }
     t >>= 1
   }
-  ls[0] = s
+  idx.ls[0] = s
 }

@@ -16,6 +16,15 @@ type Dictionary struct {
 
 const maxkeylen = 64
 
+func NewDict(filename string) Dictionary{
+  dict := Dictionary{
+    filename : filename,
+  }
+
+  dict.LoadDictFile()
+  return dict
+}
+
 func (d *Dictionary)AddDict(key string) int {
   var strkey string
   if len(key) > maxkeylen {
@@ -23,7 +32,7 @@ func (d *Dictionary)AddDict(key string) int {
   }
 
   // 查找键值是否存在
-  if v, ok := d.dict[key]; !ok {
+  if _, ok := d.dict[key]; !ok {
     d.curSize++
     d.dict[strkey] = d.curSize
   	//fmt.Println(v)
@@ -69,7 +78,7 @@ func (d *Dictionary)WriteDictFile(){
      strkey = strings(key[0:maxkeylen-1])
    }*/
    bw := bufio.NewWriter(fo)
-   buf := make([]byte, maxkeylen+6)
+   //buf := make([]byte, maxkeylen+6)
    for k, v := range d.dict {
      strval := strconv.Itoa(v)
      str := k + "," + strval + "\n"//strings.Join({strkey, strval}, ",")
