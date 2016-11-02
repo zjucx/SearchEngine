@@ -3,12 +3,14 @@ package main
 import (
 	//"fmt"
 	//"os"
-	"segment"
+	//"segment"
 	//"invertidx"
+	"web"
 )
 
 func main() {
 		//scrawler.Scrawler("xxxxxxx@163.com", "xxxxxxx")
-		segment.Segment()
+		//segment.Segment()
 		//scrawler.Scrawler()
+		web.Main()
 }
