@@ -1,10 +1,10 @@
-package web
+package main
 
 import (
 	_ "web/routers"
 	"github.com/astaxie/beego"
 )
 
-func Main() {
+func main() {
 	beego.Run()
 }

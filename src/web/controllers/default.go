@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"github.com/astaxie/beego"
-	"segment"
+	//"segment"
 )
 
 type MainController struct {
@@ -10,7 +10,7 @@ type MainController struct {
 }
 
 func (c *MainController) Get() {
-	segment.Segment()
+	//segment.Segment()
 	c.Data["Website"] = "beego.me"
 	c.Data["Email"] = "astaxie@gmail.com"
 	c.TplName = "index.tpl"

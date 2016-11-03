@@ -5,12 +5,12 @@ import (
 	//"os"
 	//"segment"
 	//"invertidx"
-	"web"
+	//"web"
 )
 
 func main() {
 		//scrawler.Scrawler("xxxxxxx@163.com", "xxxxxxx")
 		//segment.Segment()
 		//scrawler.Scrawler()
-		web.Main()
+		//web.Main()
 }
