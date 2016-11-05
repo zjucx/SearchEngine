@@ -41,12 +41,11 @@ export default {
 }
 #app h1 {
 	/*position: absolute;*/
-  display: block;
-	top: -155px;
-	width: 100%;
 	font-size: 100px;
 	font-weight: 100;
 	text-align: center;
-	color: rgba(175, 47, 47, 0.15);
+  margin-top: 0;
+  background:transparent;
+  background-color:rgba(255,255,255,0)
 }
 </style>

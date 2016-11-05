@@ -1,7 +1,7 @@
 <template>
 <div class="search" @mousedown="startDrag" @touchstart="startDrag" @mousemove="onDrag" @touchmove="onDrag" @mouseup="stopDrag" @touchend="stopDrag" @mouseleave="stopDrag">
   <svg class="bg" width="640" height="560">
-      <path :d="headerPath" fill="#F5F5F5"></path>
+      <path :d="headerPath" fill="#084F89"></path>
     </svg>
   <div class="header">
     <slot name="header"></slot>
@@ -81,12 +81,6 @@ export default {
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
-h1 {
-  font-weight: 300;
-  font-size: 1.8em;
-  margin-top: 0;
-  background: #F5F5F5;
-}
 
 .search {
   background: #F5F5F5;
