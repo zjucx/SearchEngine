@@ -25,6 +25,24 @@ export default {
     box-shadow: inset 0 -2px 1px rgba(0,0,0,0.03);
 }
 
+.searchInput input::-webkit-input-placeholder {
+	font-style: italic;
+	font-weight: 300;
+	color: #e6e6e6;
+}
+
+.searchInput input::-moz-placeholder {
+	font-style: italic;
+	font-weight: 300;
+	color: #e6e6e6;
+}
+
+.searchInput input::input-placeholder {
+	font-style: italic;
+	font-weight: 300;
+	color: #e6e6e6;
+}
+
 .searchInput, .edit {
     position: relative;
     /*margin: 0;*/
@@ -35,30 +53,13 @@ export default {
     line-height: 1.4em;
     border: 0;
     outline:none;
-    color: inherit;
+    font-weight: 300;
+    font-style: italic;
     /*padding: 6px;*/
     /*border: 1px solid #999;*/
     box-shadow: inset 0 -2px 1px rgba(0,0,0,0.03);
     box-sizing: border-box;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-}
-
-.searchInput, input::-webkit-input-placeholder {
-	font-style: italic;
-	font-weight: 300;
-	color: #e6e6e6;
-}
-
-.searchInput, input::-moz-placeholder {
-	font-style: italic;
-	font-weight: 300;
-	color: #e6e6e6;
-}
-
-.searchInput, input::input-placeholder {
-	font-style: italic;
-	font-weight: 300;
-	color: #e6e6e6;
 }
 </style>
