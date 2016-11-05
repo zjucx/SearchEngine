@@ -42,22 +42,36 @@ type Index struct {
   bufo IndexBuf
 }
 
-func (idx *IndexBuf) addIndexItem(docid, wordid int) {
+func NewIdxBuf(filename string) IndexBuf{
+  idxBuf := IndexBuf{
+    filename : filename,
+    buf : make([]byte, maxbufsize),
+    length : 0,
+    offset : 0,
+    idx : 0,
+  }
+  return idxBuf
+}
+
+func (idx *IndexBuf) AddIndexItem(docid, wordid int) {
   item := Item {
     docid : uint32(docid),
     wordid : uint32(wordid),
   }
 
   l := unsafe.Sizeof(item)
-  pb := (*[]byte)(unsafe.Pointer(&item))
+  pb := (*[8]byte)(unsafe.Pointer(&item))
 
   if idx.offset + int(l) >= maxbufsize {
     idx.flush()
   }
-
   //binary.Write(&idx.buf[idx.offset], binary.BigEndian, item)
-  copy(*(*[]byte)(unsafe.Pointer(&idx.buf[idx.offset])), (*pb)[:l])
-  idx.offset += int(unsafe.Sizeof(item))
+  bufptr := (*[maxbufsize]byte)(unsafe.Pointer(&idx.buf[idx.offset]))
+  copy((*bufptr)[:l], (*pb)[:l])
+  idx.offset += int(l)
+  fmt.Println((*bufptr)[:l])
+  //tmp := (*[maxbufsize]byte)(unsafe.Pointer(&idx.buf[0]))
+  //fmt.Println((*tmp)[:idx.offset])
 }
 
 func (idx *IndexBuf) flush(){

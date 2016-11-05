@@ -6,6 +6,7 @@ import (
   "io"
   "strings"
   "strconv"
+  "fmt"
 )
 
 type Dictionary struct {
@@ -19,26 +20,31 @@ const maxkeylen = 64
 func NewDict(filename string) Dictionary{
   dict := Dictionary{
     filename : filename,
+    dict : make(map[string]int),
+  }
+  if checkFileIsExist(filename) {
+    dict.LoadDictFile()
   }
 
-  dict.LoadDictFile()
   return dict
 }
 
 func (d *Dictionary)AddDict(key string) int {
-  var strkey string
   if len(key) > maxkeylen {
-    strkey = string(key[0:maxkeylen-1])
+    key = string(key[0:maxkeylen-1])
   }
-
+fmt.Println(key)
   // 查找键值是否存在
-  if _, ok := d.dict[key]; !ok {
+  if v, ok := d.dict[key]; ok {
+    fmt.Println(v)
+    return v
+  } else {
+    fmt.Println("Key Not Found")
     d.curSize++
-    d.dict[strkey] = d.curSize
-  	//fmt.Println(v)
+    d.dict[key] = d.curSize
+    //fmt.Println(v)
     return d.curSize
   }
-  return d.dict[key]
 }
 
 func (d *Dictionary)LoadDictFile() error {

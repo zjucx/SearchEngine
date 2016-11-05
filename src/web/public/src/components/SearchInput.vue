@@ -2,8 +2,8 @@
   <input class="searchInput"
     autofocus autocomplete="off"
     placeholder="What needs to be done?"
-    v-model="newTodo"
-    @keyup.enter="addTodo">
+    v-model="searchStr"
+    @keyup.enter="search">
 </template>
 
 <script>
@@ -11,6 +11,24 @@ export default {
   name: 'searchInput',
   data: function () {
     return {
+      searchStr: ''
+    }
+  },
+
+  methods: {
+    search: function () {
+      this.$http.get(
+        '/search',
+        {
+          searchStr: this.searchStr
+        }
+      ).then((response) => {
+        this.alert('a')
+        this.alert(response.data)
+      }, (response) => {
+        console.log(this.searchStr)
+      })
+      this.searchStr = ''
     }
   }
 }
