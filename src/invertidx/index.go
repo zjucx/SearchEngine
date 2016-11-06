@@ -63,32 +63,36 @@ func (idx *IndexBuf) AddIndexItem(docid, wordid int) {
   pb := (*[8]byte)(unsafe.Pointer(&item))
 
   if idx.offset + int(l) >= maxbufsize {
-    idx.flush()
+    idx.Flush()
   }
   //binary.Write(&idx.buf[idx.offset], binary.BigEndian, item)
   bufptr := (*[maxbufsize]byte)(unsafe.Pointer(&idx.buf[idx.offset]))
   copy((*bufptr)[:l], (*pb)[:l])
   idx.offset += int(l)
-  fmt.Println((*bufptr)[:l])
   //tmp := (*[maxbufsize]byte)(unsafe.Pointer(&idx.buf[0]))
   //fmt.Println((*tmp)[:idx.offset])
 }
 
-func (idx *IndexBuf) flush(){
+func (idx *IndexBuf) Flush(){
   //open file and write to file
   f, err := OpenFile(idx.filename)
   CheckErr(err)
   bw := bufio.NewWriter(f)
-  idx.quickSort(0, idx.offset/int(unsafe.Sizeof(&Item{})))
-  bw.Write(idx.buf)
+  idx.quickSort(0, idx.offset/int(unsafe.Sizeof(&Item{}))-1)
+  bw.Write(idx.buf[:idx.offset])
   bw.Flush()
+  // f.Write(idx.buf)
+  // f.Close()
   //reset var
   idx.offset = 0
+  idx.length = 0
+  // idx.buf = make([]byte, maxbufsize)
 }
  /*
   * the mian enter of algorithm of quicksort
   */
 func (idx *IndexBuf)quickSort(s, t int) {
+  if t < 0 {return}
   m := idx.split(s, t)
   for s > t {
     idx.quickSort(s, m-1)
@@ -99,8 +103,8 @@ func (idx *IndexBuf)quickSort(s, t int) {
  * the split part of algorithm of quicksort
  */
 func (idx *IndexBuf)split(s, t int) int {
-  var j int
-  for i, j := s, s; i < t; i++ {
+  var i, j int
+  for i, j = s, s; i < t; i++ {
     if idx.less(i, t) {
       idx.swap(i, j)
       j++
@@ -110,19 +114,22 @@ func (idx *IndexBuf)split(s, t int) int {
   return j
 }
 func (idx *IndexBuf) swap(i, j int) {
-  ptr := (*[]Item)(unsafe.Pointer(&idx.buf))
-  (*ptr)[i], (*ptr)[j] = (*ptr)[j], (*ptr)[i]
+  ptr := (*[maxbufsize/unsafe.Sizeof(&Item{})]Item)(unsafe.Pointer(&idx.buf[0]))
+  (*ptr)[i].wordid, (*ptr)[j].wordid = (*ptr)[j].wordid, (*ptr)[i].wordid
+  (*ptr)[i].docid, (*ptr)[j].docid = (*ptr)[j].docid, (*ptr)[i].docid
+  fmt.Println(i)
+  fmt.Println(j)
+  fmt.Println((*ptr)[i])
+  fmt.Println((*ptr)[j])
 }
 func (idx *IndexBuf) less(i, j int) bool {
-  ptr := (*[]Item)(unsafe.Pointer(&idx.buf))
-  if (*ptr)[i].wordid < (*ptr)[j].wordid {
-    return true
-  }
-
+  ptr := (*[maxbufsize/unsafe.Sizeof(&Item{})]Item)(unsafe.Pointer(&idx.buf[0]))
   if (*ptr)[i].docid < (*ptr)[j].docid {
     return true
   }
-
+  if (*ptr)[i].wordid < (*ptr)[j].wordid {
+    return true
+  }
   return false
 }
 

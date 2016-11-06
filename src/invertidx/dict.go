@@ -6,7 +6,7 @@ import (
   "io"
   "strings"
   "strconv"
-  "fmt"
+  // "fmt"
 )
 
 type Dictionary struct {
@@ -33,13 +33,10 @@ func (d *Dictionary)AddDict(key string) int {
   if len(key) > maxkeylen {
     key = string(key[0:maxkeylen-1])
   }
-fmt.Println(key)
   // 查找键值是否存在
   if v, ok := d.dict[key]; ok {
-    fmt.Println(v)
     return v
   } else {
-    fmt.Println("Key Not Found")
     d.curSize++
     d.dict[key] = d.curSize
     //fmt.Println(v)

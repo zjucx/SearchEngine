@@ -19,7 +19,7 @@ func Segment(){
 func segment(path string) {
   //build dict for index
   dict := invertidx.NewDict("./src/invertidx/tmpfile/dict.dict")
-  stopdict := invertidx.NewDict("./src/invertidx/tmpfile/stop.dict")
+  //stopdict := invertidx.NewDict("./src/invertidx/tmpfile/stop.dict")
   idxBuf := invertidx.NewIdxBuf("./src/invertidx/tmpfile/idx.tmp")
 
   //walk the file in specific dir and write to the raw index file
@@ -46,9 +46,9 @@ func segment(path string) {
       for _, v := range words {
         //build dictory
         v := dict.AddDict(v)
-        fmt.Println(v)
         idxBuf.AddIndexItem(1, v)
       }
+      idxBuf.Flush()
       //segLine(line, dict, idxBuf)
 
       if err != nil {
@@ -59,6 +59,7 @@ func segment(path string) {
   		}
     }
   })
+  // idxBuf.Flush()
   if err != nil {
     fmt.Printf("filepath.Walk() returned %v\n", err)
   }
