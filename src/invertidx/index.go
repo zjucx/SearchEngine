@@ -117,10 +117,6 @@ func (idx *IndexBuf) swap(i, j int) {
   ptr := (*[maxbufsize/unsafe.Sizeof(&Item{})]Item)(unsafe.Pointer(&idx.buf[0]))
   (*ptr)[i].wordid, (*ptr)[j].wordid = (*ptr)[j].wordid, (*ptr)[i].wordid
   (*ptr)[i].docid, (*ptr)[j].docid = (*ptr)[j].docid, (*ptr)[i].docid
-  fmt.Println(i)
-  fmt.Println(j)
-  fmt.Println((*ptr)[i])
-  fmt.Println((*ptr)[j])
 }
 func (idx *IndexBuf) less(i, j int) bool {
   ptr := (*[maxbufsize/unsafe.Sizeof(&Item{})]Item)(unsafe.Pointer(&idx.buf[0]))
