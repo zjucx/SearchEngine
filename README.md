@@ -7,25 +7,24 @@
 ### Introduction
 使用golang开发的[分布式爬虫系统](https://github.com/zjucx/DistributedCrawler.git)，主要分为3个模块:[分布式框架](src/docs/framework.md)、[数据管理](src/docs/model.md)和[爬虫部分](src/docs/scrawler.md)。目录结构如下:
 ```
-├── conf
-│   └── app.conf       ------配置部分，数据库等信息的配置。还未开发。=。=
-├── model    
-│   ├── mongodb.go     ------爬虫的持久化介质，存储url和想要获取的数据
-│   └── redismq.go     ------实用redis实现的优先级队列，master从mongodb获取url和向worker分发url
-├── distribute    
-│   ├── common.go      ------分布式系统的辅助类的定义等
-│   ├── master.go      ------分布式系统的master节点，任务的分发调度
-│   └── worker.go      ------分布式系统的worker节点，接受master的任务
+├── btree
+│   ├── bplustree.go     ------btree
+│   ├── internode.go     ------btree内节点的定义和操作
+│   ├── leafnode.go      ------btree叶节点的定义和操作
+│   └── node.go          ------节点的接口类
+├── serment    
+│   └── segment.go     ------分词部分，对爬虫爬取的数据进行分词
+├── invertidx    
+│   ├── dict.go       ------由分词部分构成的字典,实现词和整型数据的映射
+│   ├── file.go       ------文件相关的操作
+│   ├── index.go      ------倒排索引的主要实现,使用外排序算法对分词进行排序
+│   └── page.go       ------暂未使用,文件映射功能
 ├── main.go
-└── scrawler           ------定义了数据库模型，用于与数据库交互
+└── crawler
     ├── sinaLogin.go   ------模拟登陆模块，工程中实现了新浪微博的模拟登陆
-    ├── scrawler.go    ------爬虫模块的入口，将接口暴漏于分布式模块
-    ├── scheduler.go   ------爬虫的调度器，由于对master分发的url任务的预处理
-    ├── downloader.go  ------爬虫的下载器，管理多个下载任务的同步等操作
-    ├── spiders.go     ------爬虫的数据提取，用于提取resp的url和想要爬取的数据
-    ├── pipeline.go    ------url和目的数据的持久化操作
-    ├── request.go     ------封装的request请求
-    └── utils.go       ------爬虫的辅助类
+    ├── crawler.go     ------爬虫模块的入口，将接口暴漏于分布式模块
+    ├── request.go     ------包装请求
+    └── scrawler.go    ------爬虫的辅助类
 ```
 ### Requirements
 ```
@@ -34,10 +33,6 @@
 3. Mongodb        -------持久化介质
 4. Redis          -------优先级队列
 ```
-### Screenshots
-#### design
-![](https://github.com/zjucx/redismq/blob/master/docs/distributeredis.bmp)
-![](https://github.com/zjucx/redismq/blob/master/docs/contains.png)
 
 ### Implement
 #### [分布式框架](src/docs/framework.md)
