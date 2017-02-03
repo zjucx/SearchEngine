@@ -12,22 +12,22 @@ type kv struct {
   value *list
 }
 
-type leafNode struct {
+type LeafNode struct {
   kvs [MaxKV]kv
   count int
-  next *leafNode
-  parent *interNode
+  next *LeafNode
+  parent *InterNode
 }
 
 
-func newLeafNode(p *interNode) *leafNode {
-  return &leafNode{
+func NewLeafNode(p *interNode) *LeafNode {
+  return &LeafNode{
     parent : p,
     count : 1,
   }
 }
 
-func (l *leafnode) find(key int) (int, bool) {
+func (l *LeafNode) find(key int) (int, bool) {
   cmp := func (i int) bool {
     return l.kvs[i].key >= key
   }
@@ -41,7 +41,7 @@ func (l *leafnode) find(key int) (int, bool) {
   return i, false
 }
 
-func (l *leafNode) Insert(key int, value string) (*leafNode, Key, bool) {
+func (l *LeafNode) Insert(key int, value string) (*LeafNode, Key, bool) {
   index, ok := l.find(key)
   if !ok {
     l.kvs[index].value = value
@@ -66,9 +66,9 @@ func (l *leafNode) Insert(key int, value string) (*leafNode, Key, bool) {
   return newLeaf, k, true
 }
 
-func split(l *leafNode) (*leafNode, key) {
+func split(l *LeafNode) (*LeafNode, key) {
   midIndex := MaxKV/2
-  newLeaf := &leafNode{
+  newLeaf := &LeafNode{
     count : MaxKV - midIndex,
     next : l.next
   }
@@ -81,6 +81,6 @@ func split(l *leafNode) (*leafNode, key) {
   return newLeaf, newLeaf.kvs[0].key
 }
 
-func (l *leafnode) parent() *interNode {return l.parent}
-func (l *leafnode) setParent(in *interNode) {l.parent = in}
-func (l *leafnode) full() bool {return l.count == MaxKV}
+func (l *LeafNode) parent() *interNode {return l.parent}
+func (l *LeafNode) setParent(in *interNode) {l.parent = in}
+func (l *LeafNode) full() bool {return l.count == MaxKV}

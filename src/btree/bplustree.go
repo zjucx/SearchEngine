@@ -5,16 +5,16 @@ import (
 )
 
 type BTree struct {
-  root *interNode
-  frist *leafNode
+  root *InterNode
+  frist *LeafNode
   leafCount int
   interCount int
   height int
 }
 
 func newBTree() *BTree {
-  leaf := newLeafNode(nil)
-  r := newInterNode(nil, leaf)
+  leaf := NewLeafNode(nil)
+  r := NewInterNode(nil, leaf)
   leaf.parent = r
 
   return &BTree{

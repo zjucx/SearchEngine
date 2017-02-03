@@ -5,21 +5,21 @@ type kc struct {
   child node
 }
 
-type interNode struct {
+type InterNode struct {
   kcs [MaxKC]kc
   count int
-  parent *interNode
+  parent *InterNode
 }
 
-func newInterNode(p *interNode, largestChild node) *interNode {
-  return &interNode{
+func NewInterNode(p *InterNode, largestChild node) *InterNode {
+  return &InterNode{
     parent : p,
     count : 1,
     kcs[0].child : largestChild != nil ? largestChild : nil,
   }
 }
 
-func (in *interNode) Insert(key int, value node) (*interNode, int, bool) {
+func (in *InterNode) Insert(key int, value node) (*InterNode, int, bool) {
   index, _ := find(key)
   if !in.full() {
     copy(in.kcs[index+1:], in.kcs[index : count])
@@ -39,9 +39,9 @@ func (in *interNode) Insert(key int, value node) (*interNode, int, bool) {
   return newInter, k, true
 }
 
-func split(in  *interNode) (*interNode, int) {
+func split(in  *InterNode) (*InterNode, int) {
   midIndex := MaxKC/2
-  newInter := &interNode{
+  newInter := &InterNode{
     count : midIndex,
   }
 
@@ -52,7 +52,7 @@ func split(in  *interNode) (*interNode, int) {
   return newInter, newInter.kcs[0].key
 }
 
-func (in *interNode) find(key int) (int, bool) {
+func (in *InterNode) find(key int) (int, bool) {
   cmp := func (i int) bool {
     return in.kcs[i].key >= key
   }
@@ -62,6 +62,6 @@ func (in *interNode) find(key int) (int, bool) {
   return i, true
 }
 
-func (in *interNode) parent() *interNode {return in.parent}
-func (in *interNode) setParent(in *interNode) {in.parent = in}
-func (in *interNode) full() bool {return in.count == MaxKC}
+func (in *InterNode) parent() *InterNode {return in.parent}
+func (in *InterNode) setParent(in *InterNode) {in.parent = in}
+func (in *InterNode) full() bool {return in.count == MaxKC}
