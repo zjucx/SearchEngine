@@ -1,11 +1,6 @@
 ## Search Engine by Golang
-
-[![Build Status](https://travis-ci.org/zjucx/golang-webserver.svg?branch=master
-)](http://120.27.39.169:8080/home)
-[![Yii2](https://img.shields.io/badge/PoweredBy-ZjuCx-brightgreen.svg?style=flat)](http://120.27.39.169:8080/home)
-
 ### Introduction
-使用golang开发的[分布式爬虫系统](https://github.com/zjucx/DistributedCrawler.git)，主要分为3个模块:[分布式框架](src/docs/framework.md)、[数据管理](src/docs/model.md)和[爬虫部分](src/docs/scrawler.md)。目录结构如下:
+使用golang写的最简搜索引擎，目前主要分为4个模块:爬虫构造数据(可有可无，构建好自己的博客后删除此模块)、分词模块(用于对源文件进行分词，构建用于索引的tag，可改进优化)、倒排索引(对索引tag构建倒排索引)和BTree(实现搜索的数据结构，可与BPlusTree、RBTree等进行性能对比分析)。工程目录结构如下:
 ```
 ├── btree
 │   ├── bplustree.go     ------btree
@@ -13,59 +8,59 @@
 │   ├── leafnode.go      ------btree叶节点的定义和操作
 │   └── node.go          ------节点的接口类
 ├── serment    
-│   └── segment.go     ------分词部分，对爬虫爬取的数据进行分词
+│   └── segment.go       ------分词部分，对爬虫爬取的数据进行分词
 ├── invertidx    
-│   ├── dict.go       ------由分词部分构成的字典,实现词和整型数据的映射
-│   ├── file.go       ------文件相关的操作
-│   ├── index.go      ------倒排索引的主要实现,使用外排序算法对分词进行排序
-│   └── page.go       ------暂未使用,文件映射功能
+│   ├── dict.go          ------由分词部分构成的字典,实现词和整型数据的映射
+│   ├── file.go          ------文件相关的操作
+│   ├── index.go         ------倒排索引的主要实现,使用外排序算法对分词进行排序
+│   └── page.go          ------暂未使用,文件映射功能
 ├── main.go
 └── crawler
-    ├── sinaLogin.go   ------模拟登陆模块，工程中实现了新浪微博的模拟登陆
-    ├── crawler.go     ------爬虫模块的入口，将接口暴漏于分布式模块
-    ├── request.go     ------包装请求
-    └── scrawler.go    ------爬虫的辅助类
+    ├── sinaLogin.go     ------模拟登陆模块，工程中实现了新浪微博的模拟登陆
+    ├── crawler.go       ------爬虫模块的入口，将接口暴漏于分布式模块
+    ├── request.go       ------包装请求
+    └── scrawler.go      ------爬虫的辅助类
 ```
 ### Requirements
 ```
-1. Docker(1.1x)   -------部署mongodb服务
-2. Golang(1.6)    -------开发语言
-3. Mongodb        -------持久化介质
-4. Redis          -------优先级队列
+1. Golang(1.6)           -------开发语言
+2. BTree、倒排索引、外排序等算法
 ```
 
 ### Implement
-#### [分布式框架](src/docs/framework.md)
+#### BTree
+原理参考[BTree和B+Tree详解](http://blog.csdn.net/endlu/article/details/51720299)
+算法实现分拆为内节点、叶结点和根结点三个文件。内节点和叶结点包含插入搜索和查找操作，具体实现可参考代码
 ```
-分为master节点和worker节点，master节点用于分发任务，worker节点用于任务执行。
+写好了实现的大体思路，假期结束还未调通，有时间继续完善。
 ```
-#### [数据管理](src/docs/model.md)
+#### 倒排索引
+使用外排序对各个文本的分词结果进行排序，生成一个倒排索引文件(目前只是单机实现)
 ```
-分为持久化mongodb和内存数据库redis(实现优先级队列)。
+输入为分词部分构造的词典，输出为设计好的倒排索引文件也是BTree的输入
 ```
-#### [爬虫部分](src/docs/scrawler.md)
+#### 爬虫部分
+构造原始数据
 ```
-模拟登陆部分获取cookie，数据爬取部分。
+输出纯文本文件，是分词部分的输入
+```
+#### 分词
+暂时使用结巴分词进行分词(改进使用深度学习进行分词)
+```
+输入为爬虫部分构造的数据，输出分词字典为倒排的输入
 ```
 ### Using
 ```
-<!--  Prepare redis servre and containers for worker  --!>
-git clone https://github.com/zjucx/DistributedCrawler.git
-cd DistributedCrawler
-go get (代理代理代理)
-// for master
-go run main.go master masterip:port
-// for workers
-go run main.go worker masterip:port workerip:port
+各个模块在main.go中独立运行、调试
 ```
 
 ### To Do List
 ```
-1) 爬虫系统的[web界面]()
-2) 日志管理，可维可测功能
-3) 使用Zookeeper实现分布式配置管理
-3) 爬虫的单机操作
+1) BPlusTree、RBTree实现、性能分析
+2) 应用个人博客的全文索引
+3) 使用MapReduce进行外排序的分布式实现
+4) 使用深度学习进行分词改进(测试发现结巴分词准确率略低，深度学习在NLP已经很成熟)
 ```
 ### Discussing
-- [submit issue](https://github.com/zjucx/DistributedCrawler/issues/new)
+- [submit issue](https://github.com/zjucx/SearchEngineByGolang/issues/new)
 - email: 862575451@qq.com

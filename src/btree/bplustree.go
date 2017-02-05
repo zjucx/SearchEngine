@@ -12,7 +12,7 @@ type BTree struct {
   height int
 }
 
-func newBTree() *BTree {
+func NewBTree() *BTree {
   leaf := NewLeafNode(nil)
   r := NewInterNode(nil, leaf)
   leaf.parent = r
@@ -60,18 +60,18 @@ func (bt *BTree) Search(key int) (string, bool) {
   return kv.value, true
 }
 
-func search(n node, key int) (*kv, int, *leafNode) {
+func search(bt *BTree, key int) (*kv, int, *LeafNode) {
   curr := bt.root
   index := -1
   for {
     switch t := curr.(type) {
-    case *leafNode:
+    case *LeafNode:
       i, ok := t.find(key)
       if !ok {
         return "", index, t
       }
       return t.kvs[i].value, index, t
-    case *interNode:
+    case *InterNode:
       i, _ = t.find(key)
       index = i
       curr = t.kcs[i].child

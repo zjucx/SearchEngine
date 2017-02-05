@@ -20,7 +20,7 @@ type LeafNode struct {
 }
 
 
-func NewLeafNode(p *interNode) *LeafNode {
+func NewLeafNode(p *InterNode) *LeafNode {
   return &LeafNode{
     parent : p,
     count : 1,
@@ -81,6 +81,6 @@ func split(l *LeafNode) (*LeafNode, key) {
   return newLeaf, newLeaf.kvs[0].key
 }
 
-func (l *LeafNode) parent() *interNode {return l.parent}
-func (l *LeafNode) setParent(in *interNode) {l.parent = in}
+func (l *LeafNode) parent() *InterNode {return l.parent}
+func (l *LeafNode) setParent(in *InterNode) {l.parent = in}
 func (l *LeafNode) full() bool {return l.count == MaxKV}
