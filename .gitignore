@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+data/
+npm-debug.log
+src/github.com/
+src/gopkg.in/
+bin/
