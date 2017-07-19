@@ -22,7 +22,7 @@ type BPlusTree struct {
   uint32 pageSize         /* Total number of bytes on a page */
   uint32 usableSize       /* Number of usable bytes on each page */
   uint32 nPage            /* Number of pages in the database */
-  num2page map[uint32]*MemPage
+  hm map[uint32]*MemPage  /* map pageno to MemPage */
 }
 
 /* Each btree pages is divided into three sections:  The header, the
@@ -59,23 +59,17 @@ type PageHeader struct {
   flag uint8
   freeOffset uint16
   nCell uint16
-  plOffset uint16
+  pgno uint16
   nFree uint8
   parent uint32
 }
 
 type MemPage struct{
-  uint16 pgno           /* Page number for this page */
-  /* Only the first 8 bytes (above) are zeroed by pager.c when a new page
-  ** is allocated. All fields that follow must be initialized before use */
-  u8 leaf             /* True if a leaf page */
-  u8 hdrOffset        /* 100 for page 1.  0 otherwise */
-  uint16 nFree           /* Number of free bytes on the page */
-  uint16 nCell           /* Number of cells on this page, local and ovfl */
-  u8 *aData           /* Pointer to disk image of the page data */
-  u8 *aDataEnd        /* One byte past the end of usable data */
-  u8 *aCellIdx        /* The cell index area */
-  u8 *aDataOfst       /* Same as aData for leaves.  aData+4 for interior */
+  ph *PageHeader
+  aData unsafe.Pointer          /* Pointer to disk image of the page data */
+  aDataEnd unsafe.Pointer       /* One byte past the end of usable data */
+  aCellIdx unsafe.Pointer       /* The cell index area */
+  aDataOfst unsafe.Pointer      /* Same as aData for leaves.  aData+4 for interior */
 }
 
 
@@ -99,5 +93,5 @@ type Cell struct {
 type Payload struct {
   key     uint32             /* value in the unpacked key */
   entrys  unsafe.Pointer            /* fot data compress */
-  nEntry  uint16             /* Number of values.  Might be zero */
+  size    uint16             /* Number of values.  Might be zero */
 }
