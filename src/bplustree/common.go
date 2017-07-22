@@ -92,6 +92,6 @@ type Cell struct {
  */
 type Payload struct {
   key     uint32             /* value in the unpacked key */
-  entrys  unsafe.Pointer            /* fot data compress */
   size    uint16             /* Number of values.  Might be zero */
+  entrys  unsafe.Pointer            /* fot data compress */
 }
