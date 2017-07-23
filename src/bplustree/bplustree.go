@@ -30,53 +30,15 @@ type BPlusTree struct {
   hm map[uint32]*MemPage  /* map pageno to MemPage */
 }
 
-/* Each btree pages is divided into three sections:  The header, the
-** cell pointer array, and the cell content area.  Page 1 also has a 100-byte
-** file header that occurs before the page header.
-**
-**      |----------------|
-**      | file header    |   100 bytes.  Page 1 only.
-**      |----------------|
-**      | page header    |   8 bytes for leaves.  12 bytes for interior nodes
-**      |----------------|
-**      | cell pointer   |   |  2 bytes per cell.  Sorted order.
-**      | array          |   |  Grows downward
-**      |                |   v
-**      |----------------|
-**      | unallocated    |
-**      | space          |
-**      |----------------|   ^  Grows upwards
-**      | cell content   |   |  Arbitrary order interspersed with freeblocks.
-**      | area           |   |  and free space fragments.
-**      |----------------|
-**
-** The page headers looks like this:
-**
-**   OFFSET   SIZE     DESCRIPTION
-**      0       1      Flags. 1: interpage, 2: leafpage, 4: overflowpage, 8: zeropage
-**      1       2      byte offset to the first freeblock
-**      3       2      number of cells on this page
-**      5       2      first byte of the cell content area
-**      7       1      number of fragmented free bytes
-**      8       4      Right child (the Ptr(N) value).  Omitted on leaves.
-*/
-type PageHeader struct {
-  flag uint8
-  freeOffset uint16
-  nCell uint16
-  pgno uint16
-  nFree uint8
-  parent uint32
-}
-
 type MemPage struct{
-  ph *PageHeader
-  aData unsafe.Pointer          /* Pointer to disk image of the page data */
-  aDataEnd unsafe.Pointer       /* One byte past the end of usable data */
-  cell unsafe.Pointer       /* The cell index area */
-  aDataOfst unsafe.Pointer      /* Same as aData for leaves.  aData+4 for interior */
+  flag  uint8
+  pgno  uint16                  /* page number */
+  ppgno uint32                  /* parent page number */
+  maxkey uint32                 /* max key int current page */
+  ncell uint16
+  free uint16                   /* free bytes in current page */
+  cell  unsafe.Pointer          /* pointer to page in cache */
 }
-
 
 /* The basic idea is that each page of the file contains N database
 ** entries and N+1 pointers to subpages.
@@ -125,10 +87,10 @@ func (bptree *BPlusTree) Insert(pl *PlayLoad) {
       rootpage := &MemPage{}
       bptree.page = rootpage
       // insert new page cell
-      _, _, _ := insert(&Cell{key: key,ptr: newpg.ph.phno}, rootpage)
+      insert(&Cell{key: key,ptr: newpg.ph.phno}, rootpage)
 
       // insert origin page cell
-      _, _, _ := insert(&Cell{key: key,ptr: ppg.ph.phno}, rootpage)
+      insert(&Cell{key: key,ptr: ppg.ph.phno}, rootpage)
       return
     }
     ppg = bptree.hm[ppg.parent()]
@@ -164,6 +126,9 @@ func (p *MemPage) insert(data interface{}) (bool, uint32, *MemPage){
   //key, newpg :=split(pg)
   newpg := newpage()
   //update page info
+  newpg.maxkey = p.maxkey
+  p.maxkey = ((*Cell)p.cell)[ncell/2].key
+  p.ncell = ncell/2
 
   return false, key, newpg
 }
@@ -173,37 +138,43 @@ func (p *MemPage) find(key int) (int, bool) {
     return p.cell[i].key >= key
   }
 
-  i := sort.Search(p.ph.nCell, cmp)
+  i := sort.Search(p.ncell, cmp)
 
-  if p.ph.flag == INTERPAGE {
+  if p.flag == INTERPAGE {
     return p.cell[i].ptr, true
   }
 
-  if i <= p.ph.nCell && p.cell[i].key == key {
+  if i <= p.ncell && p.cell[i].key == key {
     return p.cell[i].ptr, true
   }
 
   return nil, false
 }
 
+func newpage() *MemPage{
+  page := &MemPage{}
+  // alloc page in cache
+  // page.cell = cache.allocpage()[100]
+}
+
 func (p *MemPage) parent() uint32 {
-  return p.ph.pgno
+  return p.ppgno
 }
 
 func (p *MemPage) setparent(uint32 pgno) {
-  p.ph.parent = pgno
+  p.ppgno = pgno
 }
 
 func (p *MemPage) full(data interface{}) bool {
   switch data.(type){
   case *Cell:
-    if p.ph.flag == INTERPAGE {
-      return p.ph.nFree > (pl.size + size(Cell))
+    if p.flag == INTERPAGE {
+      return p.free >= size(Cell)
     }
     panic("full error")
   case *PlayLoad:
-    if p.ph.flag == LEAFPAGE {
-      return p.ph.nFree > (pl.size + size(Cell))
+    if p.flag == LEAFPAGE {
+      return p.free >= (pl.size + size(Cell))
     }
     panic("full error")
   }
