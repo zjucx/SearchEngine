@@ -18,15 +18,8 @@ const (
 ** to this one BPlusTree object.
 */
 type BPlusTree struct {
-  Pager *pPager           /* The page cache */
+  // Pager *pPager           /* The page cache */
   MemPage *page           /* First page of the database */
-  uint16 maxLocal         /* Maximum local payload in non-LEAFDATA tables */
-  uint16 minLocal         /* Minimum local payload in non-LEAFDATA tables */
-  uint16 maxLeaf          /* Maximum local payload in a LEAFDATA table */
-  uint16 minLeaf          /* Minimum local payload in a LEAFDATA table */
-  uint32 pageSize         /* Total number of bytes on a page */
-  uint32 usableSize       /* Number of usable bytes on each page */
-  uint32 nPage            /* Number of pages in the database */
   hm map[uint32]*MemPage  /* map pageno to MemPage */
 }
 
@@ -54,7 +47,7 @@ type Cell struct {
 
 /* DocId1 DocId2 ...
 **   -----------------------------------------------------------------
-**   |  key | DocId1 | DocId1 | DocId3 | ... | DocId(N-1) | DocId(N) |
+**   |  key | DocSiz | DocId1 | DocId3 | ... | DocId(N-1) | DocId(N) |
 **   -----------------------------------------------------------------
  */
 type Payload struct {

@@ -53,7 +53,7 @@ struct PgHdr {
 };
 
 struct Pager {
-  int nMmapOut;               /* Number of mmap pages currently outstanding */
+  f *File              /* Number of mmap pages currently outstanding */
   PgHdr *pMmapFreelist;       /* List of free mmap page headers (pDirty) */
   /*
   ** End of the routinely-changing class members
@@ -62,21 +62,25 @@ struct Pager {
   u16 nExtra;                 /* Add this many bytes to each in-memory page */
   int pageSize;               /* Number of bytes in a page */
   Pgno mxPgno;                /* Maximum allowed size of the database */
-  char *zFilename;            /* Name of the database file */
+  filename string           /* Name of the database file */
   PCache *pPCache;            /* Pointer to page cache object */
 };
 
 /* Open and close a Pager connection. */
-int pagerOpen(
-  sqlite3_vfs*,
-  Pager **ppPager,
-  const char*,
-  int,
-  int,
-  int,
-  void(*)(DbPage*)
-);
-int pagerClose(Pager *pPager, sqlite3*);
+func (p *Pager) Open(filename string) {
+  p.filename = filename
+  f, err := OpenFile(filename, O_RDWR|O_APPEND|O_CREATE, 0660)
+  if err != nil {
+		fmt.Println(err)
+	}
+  p.f = f
+}
+
+func (p *Pager) Close(filename string) {
+  if p.f != nil {
+    p.f.Close()
+  }
+}
 int pagerReadFileheader(Pager*, int, unsigned char*);
 void pagerShrink(Pager*);
 
