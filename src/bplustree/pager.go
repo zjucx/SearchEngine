@@ -30,59 +30,52 @@
 **      8       4      Right child (the Ptr(N) value).  Omitted on leaves.
 */
 
-/*
-** Every page in the cache is controlled by an instance of the following
-** structure.
-**
-** A Page cache line looks like this:
-**
-**  --------------------------------------------------
-**  |  database page content   |  PgHdr  |  MemPage  |
-**  --------------------------------------------------
-*/
-struct PgHdr {
-  void *pData;                   /* Page data */
-  void *pExtra;                  /* Extra content */
-  PCache *pCache;                /* PRIVATE: Cache that owns this page */
-  PgHdr *pDirty;                 /* Transient list of dirty sorted by pgno */
-  Pager *pPager;                 /* The pager this page is part of */
-  Pgno pgno;                     /* Page number for this page */
-  i16 nRef;                      /* Number of users of this page */
-  PgHdr *pDirtyNext;             /* Next element in list of dirty pages */
-  PgHdr *pDirtyPrev;             /* Previous element in list of dirty pages */
-};
+type PgHeader struct {
+  flag uint8
+  free uint16
+  pgno uint32
+  ppgno uint32
+}
 
-struct Pager {
+type Pager struct{
   f *File              /* Number of mmap pages currently outstanding */
-  PgHdr *pMmapFreelist;       /* List of free mmap page headers (pDirty) */
-  /*
-  ** End of the routinely-changing class members
-  ***************************************************************************/
-
-  u16 nExtra;                 /* Add this many bytes to each in-memory page */
-  int pageSize;               /* Number of bytes in a page */
-  Pgno mxPgno;                /* Maximum allowed size of the database */
-  filename string           /* Name of the database file */
+  pageSize uint32               /* Number of bytes in a page */
+  mxPgno uint32                /* Maximum allowed size of the database */
+  fileName string           /* Name of the database file */
   PCache *pPCache;            /* Pointer to page cache object */
 };
 
 /* Open and close a Pager connection. */
-func (p *Pager) Open(filename string) {
-  p.filename = filename
+func (p *Pager) Open(fileName string) {
+  p.pageSize = 4096
+  p.fileName = fileName
+
   f, err := OpenFile(filename, O_RDWR|O_APPEND|O_CREATE, 0660)
   if err != nil {
 		fmt.Println(err)
 	}
   p.f = f
+
+  fi, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		p.mxPgno = 0;
+	}
+  p.mxPgno = f.Size()/p.pageSize
+  p.pCache.Open()
 }
 
 func (p *Pager) Close(filename string) {
   if p.f != nil {
     p.f.Close()
   }
+  p.pCache.Close()
 }
-int pagerReadFileheader(Pager*, int, unsigned char*);
-void pagerShrink(Pager*);
+func (p *Pager)ReadPageHeader(pgno uint32) *PgHeader {
+
+}
+func (p *Pager)Shrink() {
+  p.pCache.Shrink()
+}
 
 /* Operations on page references. */
 int pagerWrite(DbPage*);

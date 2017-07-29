@@ -23,11 +23,37 @@ struct PCache {
   int szSpill;                        /* Size before spilling occurs */
   int szPage;                         /* Size of every page in this cache */
   int szExtra;                        /* Size of extra space for each page */
-  u8 bPurgeable;                      /* True if pages are on backing store */
-  u8 eCreate;                         /* eCreate value for for xFetch() */
-  int (*xStress)(void*,PgHdr*);       /* Call to try make a page clean */
-  void *pStress;                      /* Argument to xStress */
-  sqlite3_pcache *pCache;             /* Pluggable cache module */
+
+  /* Hash table of all pages. The following variables may only be accessed
+  ** when the accessor is holding the PGroup mutex.
+  */
+  unsigned int nRecyclable;           /* Number of pages in the LRU list */
+  unsigned int nPage;                 /* Total number of pages in apHash */
+  unsigned int nHash;                 /* Number of slots in apHash[] */
+  PgHdr1 **apHash;                    /* Hash table for fast lookup by key */
+  PgHdr1 *pFree;                      /* List of unused pcache-local pages */
+  void *pBulk;                        /* Bulk memory used by pcache-local */
+};
+
+/*
+** Every page in the cache is controlled by an instance of the following
+** structure.
+**
+** A Page cache line looks like this:
+**
+**  --------------------------------------------------
+**  |  database page content   |  PgHdr  |  MemPage  |
+**  --------------------------------------------------
+*/
+struct PgHdr {
+  void *pData;                   /* Page data */
+  void *pExtra;                  /* Extra content */
+  PCache *pCache;                /* PRIVATE: Cache that owns this page */
+  PgHdr *pDirty;                 /* Transient list of dirty sorted by pgno */
+  Pager *pPager;                 /* The pager this page is part of */
+  Pgno pgno;                     /* Page number for this page */
+  PgHdr *pDirtyNext;             /* Next element in list of dirty pages */
+  PgHdr *pDirtyPrev;             /* Previous element in list of dirty pages */
 };
 
 /* Initialize and shutdown the page cache subsystem */
