@@ -100,7 +100,6 @@ func (p *Pager) Sync(){
 
   // make cache clear
   p.pCache.CleanAll();
-  return rc;
 }
 
 

@@ -26,7 +26,6 @@ struct PCache {
   /* Hash table of all pages. The following variables may only be accessed
   ** when the accessor is holding the PGroup mutex.
   */
-  nRecyclable uint32           /* Number of pages in the LRU list */
   nPage uint32                 /* Total number of pages in apHash */
   nHash uint32                /* Number of slots in apHash[] */
   apHash **PgHdr                    /* Hash table for fast lookup by key */
@@ -57,19 +56,9 @@ type PgHdr struct {
   pLruPrev *PgHdr              /* Previous in LRU list of unpinned pages */
 }
 
-/* One release per successful fetch.  Page is pinned until released.
-** Reference counted.
-*/
-int cacheFetchStress(PCache*, Pgno, sqlite3_pcache_page**);
-PgHdr *cacheFetchFinish(PCache*, Pgno, sqlite3_pcache_page *pPage);
-void cacheRelease(PgHdr*);
-
-void cacheDrop(PgHdr*);         /* Remove page from cache */
 void cacheMakeDirty(PgHdr*);    /* Make sure page is marked dirty */
 void cacheMakeClean(PgHdr*);    /* Mark a single page as clean */
 void cacheCleanAll(PCache*);    /* Mark all dirty list pages as clean */
-
-
 
 /*
 ** Implementation of the Create method.
@@ -124,7 +113,7 @@ func (pCache *PCache) Destroy(){
   // free(pCache);
 }
 
-func (pCache *PCache) Fetch(iKey uint32) *PgHdr {
+func (pCache *PCache) FetchPage(iKey uint32) *PgHdr {
 
   /* Step 1: Search the hash table for an existing entry. */
   pPage := pCache.apHash[iKey % pCache.nHash];
@@ -172,7 +161,6 @@ func (pCache *PCache) Fetch(iKey uint32) *PgHdr {
   return pPage;
 }
 
-
 /*
 ** Allocate a new page object initially associated with cache pCache.
 */
@@ -188,7 +176,6 @@ func (pCache *PCache) AllocPage(){
     p.page.pBuf = pPg
     p.page.pExtra = &p[1]
     p.isBulkLocal = 0
-    p.isAnchor = 0
   }
   return p
 }
@@ -216,7 +203,7 @@ func (pCache *PCache) ResizeHash(){
     nNew = 256;
   }
 
-  apNew := (PgHdr **)new(sizeof(PgHdr *)*nNew);
+  apNew := make([]*PgHdr, nNew);
 
   for i:=0; i<pCache.nHash; i++{
     pCurPg := pCache.apHash[i];
@@ -249,4 +236,52 @@ func (pCache *PCache) RemoveFromHash(pPage *PgHdr) {
 
   pCache.nPage--;
   pCache.FreePage(pPage);
+}
+
+/* Allowed values for second argument to ManageDirtyList() */
+const PCACHE_DIRTYLIST_REMOVE   1    /* Remove pPage from dirty list */
+const PCACHE_DIRTYLIST_ADD      2    /* Add pPage to the dirty list */
+const PCACHE_DIRTYLIST_FRONT    3    /* Move pPage to the front of the list */
+
+/*
+** Manage pPage's participation on the dirty list.  Bits of the addRemove
+** argument determines what operation to do.  The 0x01 bit means first
+** remove pPage from the dirty list.  The 0x02 means add pPage back to
+** the dirty list.  Doing both moves pPage to the front of the dirty list.
+*/
+func (pCache *PCache) ManageDirtyList(pPage *PgHdr, addRemove uint8){
+
+  if addRemove & PCACHE_DIRTYLIST_REMOVE {
+
+    /* Update the PCache.pSynced variable if necessary. */
+    // if( p.pSynced==pPage ){
+    //   p.pSynced = pPage.pDirtyPrev;
+    // }
+
+    if pPage.pDirtyNext != nil {
+      pPage.pDirtyNext.pDirtyPrev = pPage.pDirtyPrev;
+    }else{
+      pCache.pDirtyTail = pPage.pDirtyPrev;
+    }
+    if pPage.pDirtyPrev != nil {
+      pPage.pDirtyPrev.pDirtyNext = pPage.pDirtyNext;
+    }else{
+      /* If there are now no dirty pages in the cache, set eCreate to 2.
+      ** This is an optimization that allows sqlite3PcacheFetch() to skip
+      ** searching for a dirty page to eject from the cache when it might
+      ** otherwise have to.  */
+      pCache.pDirty = pPage.pDirtyNext;
+    }
+    pPage.pDirtyNext = 0;
+    pPage.pDirtyPrev = 0;
+  }
+  if( addRemove & PCACHE_DIRTYLIST_ADD ){
+    pPage.pDirtyNext = p.pDirty;
+    if( pPage.pDirtyNext ){
+      pPage.pDirtyNext.pDirtyPrev = pPage;
+    }else{
+      pCache.pDirtyTail = pPage;
+    }
+    pCache.pDirty = pPage;
+  }
 }
