@@ -83,14 +83,10 @@ func (p *Pager) Write(pPg *PgHdr) {
   p.pCache.MakeDirty(pPg);
 
   /* Update the database size and return. */
-  if( pPager->dbSize < pPg->pgno ){
-    pPager->dbSize = pPg->pgno;
+  if( pPager.dbSize < pPg.pgno ){
+    pPager.dbSize = pPg.pgno;
   }
 }
-
-int pagerMovepage(Pager*,DbPage*,Pgno,int);
-void *pagerGetData(DbPage *);
-void *pagerGetExtra(DbPage *);
 
 /*
 ** Sync the database file to disk. This is a no-op for in-memory databases
@@ -100,14 +96,17 @@ void *pagerGetExtra(DbPage *);
 ** function returns SQLITE_OK. Otherwise, an IO error code is returned.
 */
 func (p *Pager) Sync(){
-  int rc = SQLITE_OK;
+  // sync file
 
-  if( isOpen(pPager->fd) ){
-    rc = sqlite3OsFileControl(pPager->fd, SQLITE_FCNTL_SYNC, pArg);
-  }
-  if( rc==SQLITE_OK && !pPager->noSync ){
-    rc = sqlite3OsSync(pPager->fd, pPager->syncFlags);
-  }
+  // make cache clear
   p.pCache.CleanAll();
   return rc;
+}
+
+
+func (p *Pager) GetData(pPg *PgHdr) {
+
+}
+func (p *Pager) GetExtra(pPg *PgHdr) {
+
 }
