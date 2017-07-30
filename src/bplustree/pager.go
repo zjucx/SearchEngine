@@ -42,7 +42,7 @@ type Pager struct{
   pageSize uint32               /* Number of bytes in a page */
   mxPgno uint32                /* Maximum allowed size of the database */
   fileName string           /* Name of the database file */
-  PCache *pPCache;            /* Pointer to page cache object */
+  pCache *PCache;            /* Pointer to page cache object */
 };
 
 /* Open and close a Pager connection. */
@@ -64,7 +64,7 @@ func (p *Pager) Open(fileName string) {
   p.pCache.Open()
 }
 
-func (p *Pager) Close(filename string) {
+func (p *Pager) Close() {
   if p.f != nil {
     p.f.Close()
   }
@@ -73,19 +73,41 @@ func (p *Pager) Close(filename string) {
 func (p *Pager)ReadPageHeader(pgno uint32) *PgHeader {
 
 }
-func (p *Pager)Shrink() {
+func (p *Pager) Shrink() {
   p.pCache.Shrink()
 }
 
 /* Operations on page references. */
-int pagerWrite(DbPage*);
-void pagerDontWrite(DbPage*);
+func (p *Pager) Write(pPg *PgHdr) {
+  /* Mark the page that is about to be modified as dirty. */
+  p.pCache.MakeDirty(pPg);
+
+  /* Update the database size and return. */
+  if( pPager->dbSize < pPg->pgno ){
+    pPager->dbSize = pPg->pgno;
+  }
+}
+
 int pagerMovepage(Pager*,DbPage*,Pgno,int);
-int pagerPageRefcount(DbPage*);
 void *pagerGetData(DbPage *);
 void *pagerGetExtra(DbPage *);
 
-/* Functions used to manage pager transactions and savepoints. */
-void pagerPagecount(Pager*, int*);
-int pagerCommit(Pager*,const char *zMaster, int);
-int pagerSync(Pager *pPager, const char *zMaster);
+/*
+** Sync the database file to disk. This is a no-op for in-memory databases
+** or pages with the Pager.noSync flag set.
+**
+** If successful, or if called on a pager for which it is a no-op, this
+** function returns SQLITE_OK. Otherwise, an IO error code is returned.
+*/
+func (p *Pager) Sync(){
+  int rc = SQLITE_OK;
+
+  if( isOpen(pPager->fd) ){
+    rc = sqlite3OsFileControl(pPager->fd, SQLITE_FCNTL_SYNC, pArg);
+  }
+  if( rc==SQLITE_OK && !pPager->noSync ){
+    rc = sqlite3OsSync(pPager->fd, pPager->syncFlags);
+  }
+  p.pCache.CleanAll();
+  return rc;
+}

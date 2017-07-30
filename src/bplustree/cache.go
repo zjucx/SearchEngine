@@ -18,11 +18,12 @@
 struct PCache {
   PgHdr *pDirty, *pDirtyTail;         /* List of dirty pages in LRU order */
   PgHdr *pSynced;                     /* Last synced page in dirty page list */
-  int nRefSum;                        /* Sum of ref counts over all pages */
+  PgHdr *pFree;                       /* List of unused pcache-local pages */
   int szCache;                        /* Configured cache size */
   int szSpill;                        /* Size before spilling occurs */
   int szPage;                         /* Size of every page in this cache */
   int szExtra;                        /* Size of extra space for each page */
+  pBulk *unsafe.Poiter
 
   /* Hash table of all pages. The following variables may only be accessed
   ** when the accessor is holding the PGroup mutex.
@@ -30,9 +31,9 @@ struct PCache {
   unsigned int nRecyclable;           /* Number of pages in the LRU list */
   unsigned int nPage;                 /* Total number of pages in apHash */
   unsigned int nHash;                 /* Number of slots in apHash[] */
-  PgHdr1 **apHash;                    /* Hash table for fast lookup by key */
-  PgHdr1 *pFree;                      /* List of unused pcache-local pages */
-  void *pBulk;                        /* Bulk memory used by pcache-local */
+  apHash **PgHdr                     /* Hash table for fast lookup by key */
+  PgHdr *pNext;                       /* Next in hash table chain */
+  unsigned int iKey;                  /* Key value (page number) */
 };
 
 /*
@@ -56,36 +57,6 @@ struct PgHdr {
   PgHdr *pDirtyPrev;             /* Previous element in list of dirty pages */
 };
 
-/* Initialize and shutdown the page cache subsystem */
-int cacheInitialize(void);
-void cacheShutdown(void);
-
-/* Page cache buffer management:
-** These routines implement SQLITE_CONFIG_PAGECACHE.
-*/
-void cacheBufferSetup(void *, int sz, int n);
-
-/* Create a new pager cache.
-** Under memory stress, invoke xStress to try to make pages clean.
-** Only clean and unpinned pages can be reclaimed.
-*/
-int cacheOpen(
-  int szPage,                    /* Size of every page */
-  int szExtra,                   /* Extra space associated with each page */
-  int bPurgeable,                /* True if pages are on backing store */
-  int (*xStress)(void*, PgHdr*), /* Call to try to make pages clean */
-  void *pStress,                 /* Argument to xStress */
-  PCache *pToInit                /* Preallocated space for the PCache */
-);
-
-/* Modify the page-size after the cache has been created. */
-int cacheSetPageSize(PCache *, int);
-
-/* Return the size in bytes of a PCache object.  Used to preallocate
-** storage space.
-*/
-int cacheSize(void);
-
 /* One release per successful fetch.  Page is pinned until released.
 ** Reference counted.
 */
@@ -99,22 +70,112 @@ void cacheMakeDirty(PgHdr*);    /* Make sure page is marked dirty */
 void cacheMakeClean(PgHdr*);    /* Mark a single page as clean */
 void cacheCleanAll(PCache*);    /* Mark all dirty list pages as clean */
 
-/* Get a list of all dirty pages in the cache, sorted by page number */
-PgHdr *cacheDirtyList(PCache*);
 
-/* Reset and close the cache object */
-void cacheClose(PCache*);
 
-/* Clear flags from pages of the page cache */
-void cacheClearSyncFlags(PCache *);
+/*
+** Implementation of the Create method.
+**
+** Allocate a new cache.
+*/
+func (pCache *PCache) Create(int szPage, int szExtra) {
+  pCache->szPage = szPage;
+  pCache->szExtra = szExtra;
+  pCache->szAlloc = szPage + szExtra + ROUND8(sizeof(PgHdr));
+  // pcache1EnterMutex(pGroup);
+  pCache.ResizeHash();
+  // pcache1LeaveMutex(pGroup);
+  if( pCache->nHash==0 ){
+    pCache.Destroy();
+    pCache = 0;
+  }
+  pCache.InitBulk()
+}
 
-/* Discard the contents of the cache */
-void cacheClear(PCache*);
-/* Free up as much memory as possible from the page cache */
-void cacheShrink(PCache*);
+/*
+** Try to initialize the pCache->pFree and pCache->pBulk fields.  Return
+** true if pCache->pFree ends up containing one or more free pages.
+*/
+func (pCache *PCache) InitBulk() unsafe.Pointer {
+  if( pCache.nInitPage==0 ) return
+  /* Do not bother with a bulk allocation if the cache size very small */
+  if( pCache.nInitPage>0 ){
+    szBulk := pCache->szAlloc * pCache.nInitPage;
+  }else{
+    szBulk = -1024 * (i64)pcache1.nInitPage;
+  }
 
-/* Return the header size */
-int sqlite3HeaderSizePcache(void);
+  zBulk = pCache->pBulk = new( szBulk );
+  if( zBulk ){
+    int nBulk = sqlite3MallocSize(zBulk)/pCache->szAlloc;
+    do{
+      PgHdr *pX = (PgHdr*)&zBulk[pCache->szPage];
+      pX->page.pBuf = zBulk;
+      pX->page.pExtra = &pX[1];
+      pX->pNext = pCache->pFree;
+      pCache->pFree = pX;
+      zBulk += pCache->szAlloc;
+    }while( --nBulk );
+  }
+  return pCache->pFree!=0;
+}
 
-/* Number of dirty pages as a percentage of the configured cache size */
-int cachePercentDirty(PCache*);
+
+/*
+** Implementation of the Destroy method.
+**
+** Destroy a cache allocated using Create().
+*/
+func (pCache *PCache) Destroy(){
+  if( pCache->nPage ) pcache1TruncateUnsafe(pCache, 0);
+  free(pCache->apHash);
+  free(pBulk)
+  free(pCache);
+}
+
+/*
+** This function is used to resize the hash table used by the cache passed
+** as the first argument.
+**
+** The PCache mutex must be held when this function is called.
+*/
+func (pCache *PCache) ResizeHash(){
+
+  nNew := pCache->nHash*2;
+  if( nNew<256 ){
+    nNew = 256;
+  }
+
+  apNew := (PgHdr **)new(sizeof(PgHdr *)*nNew);
+
+  for i:=0; i<pCache->nHash; i++{
+    pCurPg := pCache->apHash[i];
+    for pCurPg != nil {
+      h := pCurPg->iKey % nNew;
+      pNewPg := apNew[h]
+
+      apNew[h] = pCurPg
+      pCurPg = pCurPg.pNext
+      apNew[h].pNext = pNewPg
+    }
+  }
+  free(pCacheapHash);
+  pCache.apHash = apNew;
+  pCache.nHash = nNew;
+}
+
+/*
+** Remove the page supplied as an argument from the hash table
+** (PCache1.apHash structure) that it is currently stored in.
+** Also free the page if freePage is true.
+**
+*/
+func (pCache *PCache) RemoveFromHash(pPage *PgHdr) {
+
+  h := pPage->iKey % pCache->nHash
+  p := &pCache->apHash[h]
+  for p; (*p)!=pPage; p=&(*p)->pNext);
+  *p = (*p)->pNext;
+
+  pCache->nPage--;
+  pCache.FreePage(pPage);
+}
