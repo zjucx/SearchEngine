@@ -91,9 +91,6 @@ func (p *Pager) Write(pPg *PgHdr) {
 /*
 ** Sync the database file to disk. This is a no-op for in-memory databases
 ** or pages with the Pager.noSync flag set.
-**
-** If successful, or if called on a pager for which it is a no-op, this
-** function returns SQLITE_OK. Otherwise, an IO error code is returned.
 */
 func (p *Pager) Sync(){
   // sync file
