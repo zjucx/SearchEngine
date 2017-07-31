@@ -30,6 +30,10 @@
 **      8       4      Right child (the Ptr(N) value).  Omitted on leaves.
 */
 
+import(
+  "syscall"
+)
+
 type PgHeader struct {
   flag uint8
   free uint16
@@ -77,13 +81,26 @@ func (p *Pager) Shrink() {
   p.pCache.Shrink()
 }
 
+func (p *Pager) Read(pgno uint32) (n int, err Error){
+  pPg := p.pCache.FetchPage(pgno)
+  szPage := p.pCache.szPage
+  n, err = p.f.ReadAt(pPg.pBuf[:szPage], (pPg.pgno-1) * szPage)
+}
+
 /* Operations on page references. */
-func (p *Pager) Write(pPg *PgHdr) {
+func (p *Pager) Write(pPg *PgHdr) (n int, err Error){
   /* Mark the page that is about to be modified as dirty. */
   p.pCache.MakeDirty(pPg);
+  //func Pwrite(fd int, p []byte, offset int64) (n int, err error)
+  szPage := p.pCache.szPage
+  n, err = p.f.WriteAt(pPg.pBuf[:szPage], (pPg.pgno-1) * szPage)
 
+  if err != nil || n != szPage {
+    //log
+    return n, err
+  }
   /* Update the database size and return. */
-  if( pPager.dbSize < pPg.pgno ){
+  if( p.dbSize < pPg.pgno ){
     pPager.dbSize = pPg.pgno;
   }
 }
@@ -93,8 +110,12 @@ func (p *Pager) Write(pPg *PgHdr) {
 ** or pages with the Pager.noSync flag set.
 */
 func (p *Pager) Sync(){
-  // sync file
-
+  // sync file func Fdatasync(fd int) (err error)
+  err := syscall.Fdatasync(p.f.Fd())
+  if err != nil {
+    // log
+    return
+  }
   // make cache clear
   p.pCache.CleanAll();
 }

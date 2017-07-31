@@ -44,7 +44,7 @@ struct PCache {
 **  --------------------------------------------------
 */
 type PgHdr struct {
-  pData *[]byte                   /* Page data */
+  pBuf *[]byte                   /* Page data */
   pExtra *[]byte                  /* Extra content */
   pCache *PCache              /* PRIVATE: Cache that owns this page */
   pDirty *PgHdr                 /* Transient list of dirty sorted by pgno */
@@ -169,8 +169,8 @@ func (pCache *PCache) AllocPage(){
     pPg := make([]byte, pCache.szAlloc)
     p = (PgHdr1 *)&((u8 *)pPg)[pCache.szPage]
     if( pPg==0 ) return 0
-    p.page.pBuf = pPg
-    p.page.pExtra = &p[1]
+    p.pBuf = pPg
+    p.pExtra = &p[1]
     p.isBulkLocal = 0
   }
   return p
@@ -286,47 +286,31 @@ func (pCache *PCache) ManageDirtyList(pPage *PgHdr, addRemove uint8){
 ** Make sure the page is marked as dirty. If it isn't dirty already,
 ** make it so.
 */
-void sqlite3PcacheMakeDirty(PgHdr *p){
-assert( p.nRef>0 );
-assert( sqlite3PcachePageSanity(p) );
-if( p.flags & (PGHDR_CLEAN|PGHDR_DONT_WRITE) ){    /*OPTIMIZATION-IF-FALSE*/
-  p.flags &= ~PGHDR_DONT_WRITE;
-  if( p.flags & PGHDR_CLEAN ){
-    p.flags ^= (PGHDR_DIRTY|PGHDR_CLEAN);
-    pcacheTrace(("%p.DIRTY %d\n",p.pCache,p.pgno));
-    assert( (p.flags & (PGHDR_DIRTY|PGHDR_CLEAN))==PGHDR_DIRTY );
-    pcacheManageDirtyList(p, PCACHE_DIRTYLIST_ADD);
+func (pCache *PCache) MakeDirty(p *PgHdr){
+  if p.flags & PGHDR_CLEAN != 0 {
+    p.flags ^= (PGHDR_DIRTY|PGHDR_CLEAN)
+    pCache.ManageDirtyList(p, PCACHE_DIRTYLIST_ADD)
   }
-  assert( sqlite3PcachePageSanity(p) );
-}
 }
 
 /*
 ** Make sure the page is marked as clean. If it isn't clean already,
 ** make it so.
 */
-void sqlite3PcacheMakeClean(PgHdr *p){
-assert( sqlite3PcachePageSanity(p) );
-if( ALWAYS((p.flags & PGHDR_DIRTY)!=0) ){
-  assert( (p.flags & PGHDR_CLEAN)==0 );
-  pcacheManageDirtyList(p, PCACHE_DIRTYLIST_REMOVE);
-  p.flags &= ~(PGHDR_DIRTY|PGHDR_NEED_SYNC|PGHDR_WRITEABLE);
-  p.flags |= PGHDR_CLEAN;
-  pcacheTrace(("%p.CLEAN %d\n",p.pCache,p.pgno));
-  assert( sqlite3PcachePageSanity(p) );
-  if( p.nRef==0 ){
-    pcacheUnpin(p);
+func (pCache *PCache) MakeClean(p *PgHdr){
+  if (p.flags & PGHDR_DIRTY) != 0 {
+    pCache.ManageDirtyList(p, PCACHE_DIRTYLIST_REMOVE)
+    p.flags &= ~(PGHDR_DIRTY|PGHDR_NEED_SYNC|PGHDR_WRITEABLE);
+    p.flags |= PGHDR_CLEAN;
   }
-}
 }
 
 /*
 ** Make every page in the cache clean.
 */
-void sqlite3PcacheCleanAll(PCache *pCache){
-PgHdr *p;
-pcacheTrace(("%p.CLEAN-ALL\n",pCache));
-while( (p = pCache.pDirty)!=0 ){
-  sqlite3PcacheMakeClean(p);
-}
+func (pCache *PCache) MakeCleanAll(){
+  for pCache.pDirty != 0 {
+    p := pCache.pDirty
+    pCache.MakeClean(p)
+  }
 }
