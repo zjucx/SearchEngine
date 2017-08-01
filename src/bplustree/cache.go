@@ -61,9 +61,8 @@ type PgHdr struct {
 **
 ** Allocate a new cache.
 */
-func (pCache *PCache) Create(int szPage, int szExtra) {
+func (pCache *PCache) Create(int szPage) {
   pCache.szPage = szPage;
-  pCache.szExtra = szExtra;
   pCache.szAlloc = szPage + szExtra + ROUND8(sizeof(PgHdr));
   // pcache1EnterMutex(pGroup);
   pCache.ResizeHash();
@@ -167,7 +166,7 @@ func (pCache *PCache) AllocPage(){
     p.pNext = 0
   } else {
     pPg := make([]byte, pCache.szAlloc)
-    p = (PgHdr1 *)&((u8 *)pPg)[pCache.szPage]
+    p = (PgHdr *)&((u8 *)pPg)[pCache.szPage]
     if( pPg==0 ) return 0
     p.pBuf = pPg
     p.pExtra = &p[1]

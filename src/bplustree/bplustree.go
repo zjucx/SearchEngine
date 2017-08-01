@@ -18,20 +18,10 @@ const (
 ** to this one BPlusTree object.
 */
 type BPlusTree struct {
-  // Pager *pPager           /* The page cache */
-  MemPage *page           /* First page of the database */
-  hm map[uint32]*MemPage  /* map pageno to MemPage */
+  pPager *Pager           /* The page cache */
+  page *PgHead          /* First page of the database */
 }
 
-type MemPage struct{
-  flag  uint8
-  pgno  uint16                  /* page number */
-  ppgno uint32                  /* parent page number */
-  maxkey uint32                 /* max key int current page */
-  ncell uint16
-  free uint16                   /* free bytes in current page */
-  cell  unsafe.Pointer          /* pointer to page in cache */
-}
 
 /* The basic idea is that each page of the file contains N database
 ** entries and N+1 pointers to subpages.
@@ -53,10 +43,18 @@ type Cell struct {
 type Payload struct {
   key     uint32             /* value in the unpacked key */
   size    uint16             /* Number of values.  Might be zero */
-  entrys  unsafe.Pointer            /* fot data compress */
+  entrys  *[]byte            /* fot data compress */
 }
 
-func (bptree *BPlusTree) Insert(pl *PlayLoad) {
+func (bpTree *BPlusTree) Open(dbName string) {
+  pPager := &Pager{}
+  pPager.Open(dbName)
+  bpTree.pPager = pPager
+  _, pgHdr := pPager.Fatch(0)
+  bpTree.page = pgHdr.GetPageHeader()
+}
+
+func (bpTree *BPlusTree) Insert(pl *PlayLoad) {
   offset, pg := Search(pl.key)
   if offset != nil {
     return
@@ -67,33 +65,33 @@ func (bptree *BPlusTree) Insert(pl *PlayLoad) {
     return
   }
 
-  ppg := bptree.hm[pg.parent()]
+  ppg := bpTree.hm[pg.parent()]
 
   for {
-    ok, key, newpg = insert(&Cell{key: key,ptr: newpg.ph.phno}, ppg)
+    ok, key, newpg = insert(&Cell{key: key,ptr: newpg.phno}, ppg)
     if ok != nil {
       return
     }
 
-    if ppg.ph.pgno == bptree.page.pgno {
+    if ppg.pgno == bpTree.page.pgno {
       // alloc new root page for bplustree and update bplustree page
       rootpage := &MemPage{}
-      bptree.page = rootpage
+      bpTree.page = rootpage
       // insert new page cell
-      insert(&Cell{key: key,ptr: newpg.ph.phno}, rootpage)
+      insert(&Cell{key: key,ptr: newpg.phno}, rootpage)
 
       // insert origin page cell
-      insert(&Cell{key: key,ptr: ppg.ph.phno}, rootpage)
+      insert(&Cell{key: key,ptr: ppg.phno}, rootpage)
       return
     }
-    ppg = bptree.hm[ppg.parent()]
+    ppg = bpTree.hm[ppg.parent()]
   }
 }
 
-func (bptree *BPlusTree) Search(key int) (uint16, *MemPage) {
-  curr := bptree.pPage
+func (bpTree *BPlusTree) Search(key int) (uint16, *MemPage) {
+  curr := bpTree.page
   for {
-    switch t := curr.ph.flag {
+    switch t := curr.flag {
     case LEAFPAGE:
       offset, ok := find(curr, key)
       if !ok {
@@ -102,7 +100,7 @@ func (bptree *BPlusTree) Search(key int) (uint16, *MemPage) {
       return offset, curr
     case INTERPAGE:
       pgno, _ := find(key)
-      curr = bptree.hm[pgno]
+      curr = bpTree.hm[pgno]
       // pager should load page and cached
     default:
       panic("no such flag!")

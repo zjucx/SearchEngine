@@ -32,40 +32,55 @@
 
 import(
   "syscall"
+  "unsafe"
 )
 
-type PgHeader struct {
-  flag uint8
-  free uint16
-  pgno uint32
-  ppgno uint32
+type PgHead struct {
+  flag  uint8
+  ncell uint16
+  nfree uint16                   /* free bytes in current page */
+  pgno  uint32                  /* page number */
+  ppgno uint32                  /* parent page number */
+  maxkey uint32                 /* max key int current page */
 }
 
 type Pager struct{
   f *File              /* Number of mmap pages currently outstanding */
-  pageSize uint32               /* Number of bytes in a page */
-  mxPgno uint32                /* Maximum allowed size of the database */
-  fileName string           /* Name of the database file */
+  szPage uint32               /* Number of bytes in a page */
+  numPage uint32                /* Maximum allowed size of the database */
+  dbName string           /* Name of the database file */
   pCache *PCache;            /* Pointer to page cache object */
 };
 
 /* Open and close a Pager connection. */
-func (p *Pager) Open(fileName string) {
-  p.pageSize = 4096
-  p.fileName = fileName
+func (p *Pager) Open(dbName string, szPage int) {
+  p.szPage = szPage
+  p.dbName = dbName
 
-  f, err := OpenFile(filename, O_RDWR|O_APPEND|O_CREATE, 0660)
+  f, err := OpenFile(dbName, O_RDWR|O_APPEND|O_CREATE, 0660)
   if err != nil {
 		fmt.Println(err)
 	}
   p.f = f
 
   fi, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		p.mxPgno = 0;
-	}
-  p.mxPgno = f.Size()/p.pageSize
-  p.pCache.Open()
+  numPage = fi.Size()/p.szPage
+
+  pCache := &PCache{}
+  pCache.Create(szPage)
+  p.pCache = pCache
+
+  if numPage == 0 {
+    pg0 := p.Fetch(0)
+    pg1 := p.Fetch(1)
+    pg0.WritePageHeader(0, 0, 0 , 0, 0, 0, 0)
+    pg1.WritePageHeader(1, 0, 0 , 0, 0, 0, 0)
+    p.Write(pg0)
+    p.Write(pg1)
+    p.Sync()
+    numPage = 2
+  }
+  p.numPage = numPage
 }
 
 func (p *Pager) Close() {
@@ -74,17 +89,30 @@ func (p *Pager) Close() {
   }
   p.pCache.Close()
 }
-func (p *Pager)ReadPageHeader(pgno uint32) *PgHeader {
 
-}
 func (p *Pager) Shrink() {
   p.pCache.Shrink()
 }
 
-func (p *Pager) Read(pgno uint32) (n int, err Error){
-  pPg := p.pCache.FetchPage(pgno)
+func (p *Pager) Fetch(pgno uint32) (*PgHdr){
+  if pgno > p.numPage {
+    // log
+    return nil
+  }
+  return p.pCache.FetchPage(pgno)
+}
+
+func (p *Pager) Read(pgno uint32) (n int, pPg *PgHdr){
+  pPg := p.Fetch(pgno)
+  if pPg == nil {
+    return 0, nil
+  }
   szPage := p.pCache.szPage
-  n, err = p.f.ReadAt(pPg.pBuf[:szPage], (pPg.pgno-1) * szPage)
+  n, err = p.f.ReadAt(pPg.pBuf[:szPage], pPg.pgno * szPage)
+  if err != nil {
+    return 0, nil
+  }
+  return n, pPg
 }
 
 /* Operations on page references. */
@@ -121,9 +149,21 @@ func (p *Pager) Sync(){
 }
 
 
-func (p *Pager) GetData(pPg *PgHdr) {
+func (pgHdr *PgHdr) GetData(pPg *PgHdr) {
 
 }
-func (p *Pager) GetExtra(pPg *PgHdr) {
 
+func (pgHdr *PgHdr) GetPageHeader() *PgHead {
+  return (*PgHead)unsafe.Pointer(&pgHdr.pBuf[0])
+}
+
+func (pgHdr *PgHdr) WritePageHeader(flag uint8, ncell, nfree uint16,
+  pgno, ppgno, maxkey uint32) {
+  pgHead := (*PgHead)unsafe.Pointer(&pgHdr.pBuf[0])
+  pgHead.flag = flag
+  pgHead.ncell = ncell
+  pgHead.nfree = nfree
+  pgHead.pgno = pgno
+  pgHead.ppgno = ppgno
+  pgHead.maxkey = maxkey
 }
