@@ -82,7 +82,7 @@ func (pCache *PCache) InitBulk() *[]byte {
   /* Do not bother with a bulk allocation if the cache size very small */
   szBulk := pCache.nInitPage>0 ? pCache.szAlloc * pCache.nInitPage : pCache.szAlloc * 1024
 
-  zBulk := pCache.pBulk = make([]byte, szBulk)
+  zBulk := pCache.pBulk = C.malloc()//make([]byte, szBulk)
   int nBulk = szBulk/pCache.szAlloc
   for --nBulk {
     PgHdr *pX = (PgHdr*)&zBulk[pCache.szPage];
@@ -92,7 +92,7 @@ func (pCache *PCache) InitBulk() *[]byte {
     pCache.pFree = pX;
     zBulk += pCache.szAlloc;
   }
-  return pCache.pFree!=0;
+  return pCache.pFree
 }
 
 
@@ -127,7 +127,7 @@ func (pCache *PCache) FetchPage(iKey uint32) *PgHdr {
     pCache.ResizeHash()
   }
   /* Step 4. Try to recycle a page. */
-  if pCache.nPage+1>=pCache.nMax /*|| pcache1UnderMemoryPressure(pCache)*/ {
+  if pCache.nPage+1 >= pCache.nMax /*|| pcache1UnderMemoryPressure(pCache)*/ {
     pPage = pGroup.lru.pLruPrev
     pCache.RemoveFromHash(pPage)
   }

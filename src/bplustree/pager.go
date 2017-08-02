@@ -102,17 +102,17 @@ func (p *Pager) Fetch(pgno uint32) (*PgHdr){
   return p.pCache.FetchPage(pgno)
 }
 
-func (p *Pager) Read(pgno uint32) (n int, pPg *PgHdr){
+func (p *Pager) Read(pgno uint32) (pPg *PgHdr){
   pPg := p.Fetch(pgno)
   if pPg == nil {
-    return 0, nil
+    return nil
   }
   szPage := p.pCache.szPage
   n, err = p.f.ReadAt(pPg.pBuf[:szPage], pPg.pgno * szPage)
   if err != nil {
-    return 0, nil
+    return nil
   }
-  return n, pPg
+  return pPg
 }
 
 /* Operations on page references. */
@@ -148,13 +148,12 @@ func (p *Pager) Sync(){
   p.pCache.CleanAll();
 }
 
-
-func (pgHdr *PgHdr) GetData(pPg *PgHdr) {
-
+func (pgHdr *PgHdr) GetCellPtr() unsafe.Pointer {
+  return unsafe.Pointer(&(*PgHead)unsafe.Pointer(pgHdr.pBuf)[1])
 }
 
 func (pgHdr *PgHdr) GetPageHeader() *PgHead {
-  return (*PgHead)unsafe.Pointer(&pgHdr.pBuf[0])
+  return (*PgHead)unsafe.Pointer(pgHdr.pBuf)
 }
 
 func (pgHdr *PgHdr) WritePageHeader(flag uint8, ncell, nfree uint16,

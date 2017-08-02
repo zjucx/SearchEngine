@@ -22,6 +22,7 @@ type BPlusTree struct {
   page *PgHead          /* First page of the database */
 }
 
+type MemPage PgHead
 
 /* The basic idea is that each page of the file contains N database
 ** entries and N+1 pointers to subpages.
@@ -47,16 +48,15 @@ type Payload struct {
 }
 
 func (bpTree *BPlusTree) Open(dbName string) {
-  pPager := &Pager{}
-  pPager.Open(dbName)
-  bpTree.pPager = pPager
-  _, pgHdr := pPager.Fatch(0)
-  bpTree.page = pgHdr.GetPageHeader()
+  bpTree.pPager := &Pager{}
+  bpTree.pPager.Open(dbName)
+
+  bpTree.page = (pPager.Fatch(0) == nil ? nil : pPager.Fatch(0).GetPageHeader())
 }
 
 func (bpTree *BPlusTree) Insert(pl *PlayLoad) {
-  offset, pg := Search(pl.key)
-  if offset != nil {
+  of, pg := Search(pl.key)
+  if of != nil {
     return
   }
 
@@ -65,7 +65,12 @@ func (bpTree *BPlusTree) Insert(pl *PlayLoad) {
     return
   }
 
-  ppg := bpTree.hm[pg.parent()]
+  // get parent page
+  pgHdr := bpTree.pPager.Read(pg.parent())
+  if pgHdr == nil {
+    panic("")
+  }
+  ppg := pgHdr.GetPageHeader()
 
   for {
     ok, key, newpg = insert(&Cell{key: key,ptr: newpg.phno}, ppg)
@@ -84,7 +89,13 @@ func (bpTree *BPlusTree) Insert(pl *PlayLoad) {
       insert(&Cell{key: key,ptr: ppg.phno}, rootpage)
       return
     }
-    ppg = bpTree.hm[ppg.parent()]
+
+    // get parent page
+    pgHdr = bpTree.pPager.Read(ppg.parent())
+    if pgHdr == nil {
+      panic("")
+    }
+    ppg = pgHdr.GetPageHeader()
   }
 }
 
@@ -93,22 +104,27 @@ func (bpTree *BPlusTree) Search(key int) (uint16, *MemPage) {
   for {
     switch t := curr.flag {
     case LEAFPAGE:
-      offset, ok := find(curr, key)
+      of, ok := find(curr, key)
       if !ok {
         return nil, curr
       }
-      return offset, curr
+      return of, curr
     case INTERPAGE:
       pgno, _ := find(key)
-      curr = bpTree.hm[pgno]
+      // curr = bpTree.hm[pgno]
       // pager should load page and cached
+      pgHdr := bpTree.pPager.Read(pgno)
+      if pgHdr == nil {
+        panic("")
+      }
+      curr = pgHdr.GetPageHeader()
     default:
       panic("no such flag!")
     }
   }
 }
 
-func (p *MemPage) insert(data interface{}) (bool, uint32, *MemPage){
+func (page *MemPage) insert(data interface{}) (bool, uint32, *MemPage){
   ok := p.full(data)
   if !ok {
     return true, nil, nil
@@ -118,25 +134,31 @@ func (p *MemPage) insert(data interface{}) (bool, uint32, *MemPage){
   newpg := newpage()
   //update page info
   newpg.maxkey = p.maxkey
-  p.maxkey = ((*Cell)p.cell)[ncell/2].key
+  p.maxkey = ((*Cell)pCell)[ncell/2].key
   p.ncell = ncell/2
 
   return false, key, newpg
 }
 
-func (p *MemPage) find(key int) (int, bool) {
-  cmp := func (i int) bool {
-    return p.cell[i].key >= key
+func (page *MemPage) find(key int) (int, bool) {
+  if  p.pgno == 0 && p.ncell == 0 {
+    return 1, false
   }
 
-  i := sort.Search(p.ncell, cmp)
+  pCell := (*Cell)page.GetCellPtr()
+
+  cmp := func (i int) bool {
+    return pCell[i].key >= key
+  }
+
+  i := sort.Search(page.ncell, cmp)
 
   if p.flag == INTERPAGE {
-    return p.cell[i].ptr, true
+    return pCell[i].ptr, true
   }
 
-  if i <= p.ncell && p.cell[i].key == key {
-    return p.cell[i].ptr, true
+  if i <= p.ncell && pCell[i].key == key {
+    return pCell[i].ptr, true
   }
 
   return nil, false
@@ -148,15 +170,15 @@ func newpage() *MemPage{
   // page.cell = cache.allocpage()[100]
 }
 
-func (p *MemPage) parent() uint32 {
+func (page *MemPage) parent() uint32 {
   return p.ppgno
 }
 
-func (p *MemPage) setparent(uint32 pgno) {
+func (page *MemPage) setparent(uint32 pgno) {
   p.ppgno = pgno
 }
 
-func (p *MemPage) full(data interface{}) bool {
+func (page *MemPage) full(data interface{}) bool {
   switch data.(type){
   case *Cell:
     if p.flag == INTERPAGE {
