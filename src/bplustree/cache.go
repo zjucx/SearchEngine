@@ -14,14 +14,25 @@
 **   PCache.pDirty points to the first (newest) element in the list and
 **   pDirtyTail to the last (oldest).
 */
+package bplustree
 
-struct PCache {
+import (
+  "unsafe"
+)
+
+/* Allowed values for second argument to ManageDirtyList() */
+const (
+  PCACHE_DIRTYLIST_REMOVE  = 1    /* Remove pPage from dirty list */
+  PCACHE_DIRTYLIST_ADD     = 2    /* Add pPage to the dirty list */
+  PCACHE_DIRTYLIST_FRONT   = 3    /* Move pPage to the front of the list */
+)
+
+type PCache struct {
   szPage int                         /* Size of database content section */
-  szExtra int                        /* sizeof(MemPage)+sizeof(PgHdr) */
   szAlloc int                     /* Total size of one pcache line */
   nMin uint32                  /* Minimum number of pages reserved */
   nMax uint32                  /* Configured "cache_size" value */
-  pBulk *[]byte
+  pBulk *byte
 
   /* Hash table of all pages. The following variables may only be accessed
   ** when the accessor is holding the PGroup mutex.
@@ -31,7 +42,7 @@ struct PCache {
   apHash **PgHdr                    /* Hash table for fast lookup by key */
   pNext *PgHdr                     /* Next in hash table chain */
   iKey uint32                  /* Key value (page number) */
-};
+}
 
 /*
 ** Every page in the cache is controlled by an instance of the following
@@ -40,12 +51,12 @@ struct PCache {
 ** A Page cache line looks like this:
 **
 **  --------------------------------------------------
-**  |  database page content   |  PgHdr  |  MemPage  |
+**  |  database page content   |  PgHdr  |  PgHdr  |
 **  --------------------------------------------------
 */
 type PgHdr struct {
-  pBuf *[]byte                   /* Page data */
-  pExtra *[]byte                  /* Extra content */
+  pBuf *byte                   /* Page data */
+  pExtra *byte                  /* Extra content */
   pCache *PCache              /* PRIVATE: Cache that owns this page */
   pDirty *PgHdr                 /* Transient list of dirty sorted by pgno */
   pPager *PgHdr                  /* The pager this page is part of */
@@ -62,8 +73,8 @@ type PgHdr struct {
 ** Allocate a new cache.
 */
 func (pCache *PCache) Create(int szPage) {
-  pCache.szPage = szPage;
-  pCache.szAlloc = szPage + szExtra + ROUND8(sizeof(PgHdr));
+  pCache.szPage = szPage
+  pCache.szAlloc = szPage + unsafe.Sizeof(&PgHdr{})
   // pcache1EnterMutex(pGroup);
   pCache.ResizeHash();
   // pcache1LeaveMutex(pGroup);
@@ -80,17 +91,22 @@ func (pCache *PCache) Create(int szPage) {
 */
 func (pCache *PCache) InitBulk() *[]byte {
   /* Do not bother with a bulk allocation if the cache size very small */
-  szBulk := pCache.nInitPage>0 ? pCache.szAlloc * pCache.nInitPage : pCache.szAlloc * 1024
+  var szBulk int
+  if pCache.nInitPage>0 {
+    szBulk = pCache.szAlloc * pCache.nInitPage
+  } else {
+    szBulk = pCache.szAlloc * 1024
+  }
+  pBulk := (*byte)(unsafe.Pointer(C.malloc()))//make([]byte, szBulk)
+  pCache.pBulk = pBulk
 
-  zBulk := pCache.pBulk = C.malloc()//make([]byte, szBulk)
-  int nBulk = szBulk/pCache.szAlloc
-  for --nBulk {
-    PgHdr *pX = (PgHdr*)&zBulk[pCache.szPage];
-    pX.pBuf = zBulk;
-    pX.pExtra = &pX[1];
-    pX.pNext = pCache.pFree;
-    pCache.pFree = pX;
-    zBulk += pCache.szAlloc;
+  nBulk := szBulk/pCache.szAlloc
+  for i:= 0; i < nBulk; i++ {
+    pX := (*PgHdr)(unsafe.Pointer(&pBulk[i*pCache.szAlloc]))
+    pX.pBuf = pBulk
+    pX.pNext = pCache.pFree
+    pCache.pFree = pX
+    pBulk += pCache.szAlloc
   }
   return pCache.pFree
 }
@@ -147,7 +163,6 @@ func (pCache *PCache) FetchPage(iKey uint32) *PgHdr {
     pPage.pLruPrev = 0;
     pPage.pLruNext = 0;
     pPage.isPinned = 1;
-    *(void **)pPage.page.pExtra = 0;
     pCache.apHash[h] = pPage;
     if( iKey>pCache.iMaxKey ){
       pCache.iMaxKey = iKey;
@@ -159,20 +174,18 @@ func (pCache *PCache) FetchPage(iKey uint32) *PgHdr {
 /*
 ** Allocate a new page object initially associated with cache pCache.
 */
-func (pCache *PCache) AllocPage(){
+func (pCache *PCache) AllocPage() *PgHdr {
   if pCache.pFree /*|| (pCache.nPage==0 && pcache1InitBulk(pCache))*/{
-    p = pCache.pFree
-    pCache.pFree = p.pNext
-    p.pNext = 0
-  } else {
-    pPg := make([]byte, pCache.szAlloc)
-    p = (PgHdr *)&((u8 *)pPg)[pCache.szPage]
-    if( pPg==0 ) return 0
-    p.pBuf = pPg
-    p.pExtra = &p[1]
-    p.isBulkLocal = 0
+    page := pCache.pFree
+    pCache.pFree = page.pNext
+    page.pNext = 0
+    return page
   }
-  return p
+  pBulk := (*byte)(unsafe.Pointer(C.malloc()))//make([]byte, szBulk)
+  page = (*PgHdr)(unsafe.Pointer(pBulk))
+  page.pBuf = pBulk
+  page.isBulkLocal = 0
+  return page
 }
 
 /*
@@ -226,17 +239,16 @@ func (pCache *PCache) RemoveFromHash(pPage *PgHdr) {
 
   h := pPage.iKey % pCache.nHash
   p := &pCache.apHash[h]
-  for p; (*p)!=pPage; p=&(*p).pNext);
-  *p = (*p).pNext;
+  for p; (*p)!=pPage; p=&((*p).pNext) {}
 
-  pCache.nPage--;
-  pCache.FreePage(pPage);
+  if p == nil {
+    return
+  }
+  *p = (*p).pNext
+
+  pCache.nPage--
+  pCache.FreePage(pPage)
 }
-
-/* Allowed values for second argument to ManageDirtyList() */
-const PCACHE_DIRTYLIST_REMOVE   1    /* Remove pPage from dirty list */
-const PCACHE_DIRTYLIST_ADD      2    /* Add pPage to the dirty list */
-const PCACHE_DIRTYLIST_FRONT    3    /* Move pPage to the front of the list */
 
 /*
 ** Manage pPage's participation on the dirty list.  Bits of the addRemove
@@ -296,11 +308,11 @@ func (pCache *PCache) MakeDirty(p *PgHdr){
 ** Make sure the page is marked as clean. If it isn't clean already,
 ** make it so.
 */
-func (pCache *PCache) MakeClean(p *PgHdr){
-  if (p.flags & PGHDR_DIRTY) != 0 {
-    pCache.ManageDirtyList(p, PCACHE_DIRTYLIST_REMOVE)
-    p.flags &= ~(PGHDR_DIRTY|PGHDR_NEED_SYNC|PGHDR_WRITEABLE);
-    p.flags |= PGHDR_CLEAN;
+func (pCache *PCache) MakeClean(page *PgHdr){
+  if (page.flags & PGHDR_DIRTY) != 0 {
+    pCache.ManageDirtyList(page, PCACHE_DIRTYLIST_REMOVE)
+    page.flags &= ^(PGHDR_DIRTY|PGHDR_NEED_SYNC|PGHDR_WRITEABLE)
+    page.flags |= PGHDR_CLEAN
   }
 }
 

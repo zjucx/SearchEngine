@@ -3,14 +3,17 @@ package main
 import (
 	//"fmt"
 	//"os"
-	"segment"
+	//"segment"
 	//"invertidx"
 	//"web"
+	"bplustree"
 )
 
 func main() {
 		//scrawler.Scrawler("xxxxxxx@163.com", "xxxxxxx")
-		segment.Segment()
+		//segment.Segment()
 		//scrawler.Scrawler()
 		//web.Main()
+		bpTree := &BPlusTree{}
+		bpTree.Open("test.db", 1024)
 }

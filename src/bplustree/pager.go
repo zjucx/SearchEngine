@@ -29,10 +29,12 @@
 **      7       1      number of fragmented free bytes
 **      8       4      Right child (the Ptr(N) value).  Omitted on leaves.
 */
+package bplustree
 
 import(
   "syscall"
   "unsafe"
+  "os"
 )
 
 type PgHead struct {
@@ -45,7 +47,7 @@ type PgHead struct {
 }
 
 type Pager struct{
-  f *File              /* Number of mmap pages currently outstanding */
+  f *os.File              /* Number of mmap pages currently outstanding */
   szPage uint32               /* Number of bytes in a page */
   numPage uint32                /* Maximum allowed size of the database */
   dbName string           /* Name of the database file */
@@ -57,7 +59,7 @@ func (p *Pager) Open(dbName string, szPage int) {
   p.szPage = szPage
   p.dbName = dbName
 
-  f, err := OpenFile(dbName, O_RDWR|O_APPEND|O_CREATE, 0660)
+  f, err := os.OpenFile(dbName, O_RDWR|O_APPEND|O_CREATE, 0660)
   if err != nil {
 		fmt.Println(err)
 	}
@@ -103,7 +105,7 @@ func (p *Pager) Fetch(pgno uint32) (*PgHdr){
 }
 
 func (p *Pager) Read(pgno uint32) (pPg *PgHdr){
-  pPg := p.Fetch(pgno)
+  pPg = p.Fetch(pgno)
   if pPg == nil {
     return nil
   }
@@ -149,16 +151,16 @@ func (p *Pager) Sync(){
 }
 
 func (pgHdr *PgHdr) GetCellPtr() unsafe.Pointer {
-  return unsafe.Pointer(&(*PgHead)unsafe.Pointer(pgHdr.pBuf)[1])
+  return unsafe.Pointer(&pgHdr.pBuf[unsafe.Sizeof(&PgHdr{})])
 }
 
-func (pgHdr *PgHdr) GetPageHeader() *PgHead {
-  return (*PgHead)unsafe.Pointer(pgHdr.pBuf)
+func (pgHdr *PgHdr) GetPageHeader() unsafe.Pointer {
+  return unsafe.Pointer(pgHdr.pBuf)
 }
 
 func (pgHdr *PgHdr) WritePageHeader(flag uint8, ncell, nfree uint16,
   pgno, ppgno, maxkey uint32) {
-  pgHead := (*PgHead)unsafe.Pointer(&pgHdr.pBuf[0])
+  pgHead := (*PgHead)(unsafe.Pointer(&pgHdr.pBuf[0]))
   pgHead.flag = flag
   pgHead.ncell = ncell
   pgHead.nfree = nfree
