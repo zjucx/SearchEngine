@@ -18,6 +18,7 @@ package bplustree
 
 import (
   "unsafe"
+  "C"
 )
 
 /* Allowed values for second argument to ManageDirtyList() */
@@ -30,18 +31,19 @@ const (
 type PCache struct {
   szPage int                         /* Size of database content section */
   szAlloc int                     /* Total size of one pcache line */
-  nMin uint32                  /* Minimum number of pages reserved */
-  nMax uint32                  /* Configured "cache_size" value */
+  nMin int                  /* Minimum number of pages reserved */
+  nMax int                  /* Configured "cache_size" value */
   pBulk *byte
 
   /* Hash table of all pages. The following variables may only be accessed
   ** when the accessor is holding the PGroup mutex.
   */
-  nPage uint32                 /* Total number of pages in apHash */
-  nHash uint32                /* Number of slots in apHash[] */
+  nPage int                 /* Total number of pages in apHash */
+  nInitPage int
+  nHash int                /* Number of slots in apHash[] */
   apHash **PgHdr                    /* Hash table for fast lookup by key */
   pNext *PgHdr                     /* Next in hash table chain */
-  iKey uint32                  /* Key value (page number) */
+  iKey int                  /* Key value (page number) */
 }
 
 /*
@@ -60,7 +62,7 @@ type PgHdr struct {
   pCache *PCache              /* PRIVATE: Cache that owns this page */
   pDirty *PgHdr                 /* Transient list of dirty sorted by pgno */
   pPager *PgHdr                  /* The pager this page is part of */
-  iKey uint32                     /* Page number for this page */
+  iKey int                     /* Page number for this page */
   pDirtyNext *PgHdr             /* Next element in list of dirty pages */
   pDirtyPrev *PgHdr             /* Previous element in list of dirty pages */
   pLruNext *PgHdr             /* Next in LRU list of unpinned pages */
@@ -72,15 +74,14 @@ type PgHdr struct {
 **
 ** Allocate a new cache.
 */
-func (pCache *PCache) Create(int szPage) {
+func (pCache *PCache) Create(szPage int) {
   pCache.szPage = szPage
-  pCache.szAlloc = szPage + unsafe.Sizeof(&PgHdr{})
+  pCache.szAlloc = szPage + int(unsafe.Sizeof(&PgHdr{}))
   // pcache1EnterMutex(pGroup);
-  pCache.ResizeHash();
+  pCache.ResizeHash()
   // pcache1LeaveMutex(pGroup);
   if( pCache.nHash==0 ){
-    pCache.Destroy();
-    pCache = 0;
+    pCache.Destroy()
   }
   pCache.InitBulk()
 }
@@ -124,7 +125,7 @@ func (pCache *PCache) Destroy(){
   // free(pCache);
 }
 
-func (pCache *PCache) FetchPage(iKey uint32) *PgHdr {
+func (pCache *PCache) FetchPage(iKey int) *PgHdr {
 
   /* Step 1: Search the hash table for an existing entry. */
   pPage := pCache.apHash[iKey % pCache.nHash];
@@ -191,7 +192,7 @@ func (pCache *PCache) AllocPage() *PgHdr {
 /*
 ** Free a page object allocated by pcache1AllocPage().
 */
-func (pCache *PCache) FreePage(PgHdr *p){
+func (pCache *PCache) FreePage(p *PgHdr){
 
   // if( p.isBulkLocal ){
   p.pNext = pCache.pFree;
