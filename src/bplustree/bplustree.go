@@ -137,7 +137,6 @@ func (page *MemPage) insert(bpTree *BPlusTree, offset int, data interface{}) (bo
   newpg := bpTree.NewPage()
   //update page info
   newpg.maxkey = page.maxkey
-  pcell := page.cellptr(0)
 
   page.maxkey = page.cellptr(page.ncell/2).key
   page.ncell = page.ncell/2

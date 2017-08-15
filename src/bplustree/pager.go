@@ -32,7 +32,6 @@
 package bplustree
 
 import(
-  "syscall"
   "unsafe"
   "os"
   "fmt"
@@ -48,7 +47,7 @@ type PgHead struct {
 }
 
 type Pager struct{
-  f *os.File              /* Number of mmap pages currently outstanding */
+  file *os.File              /* Number of mmap pages currently outstanding */
   szPage int               /* Number of bytes in a page */
   numPage int                /* Maximum allowed size of the database */
   dbName string           /* Name of the database file */
@@ -60,11 +59,11 @@ func (p *Pager) Open(dbName string, szPage int) {
   p.szPage = szPage
   p.dbName = dbName
 
-  f, err := os.OpenFile(dbName, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
+  file, err := os.OpenFile(dbName, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
   if err != nil {
 		fmt.Println(err)
 	}
-  p.f = f
+  p.file = file
 
   fi, err := os.Stat(dbName)
   numPage := fi.Size()/int64(p.szPage)
@@ -75,28 +74,19 @@ func (p *Pager) Open(dbName string, szPage int) {
 
   if numPage == 0 {
     pg0 := p.Fetch(0)
-    pg1 := p.Fetch(1)
     pg0.WritePageHeader(0, 0, 0, 0, 0, 0)
     p.Write(pg0)
     p.Sync()
-    numPage = 2
+    numPage = 1
   }
   p.numPage = int(numPage)
 }
 
-func (p *Pager) Destroy() {
-  if p.f != nil {
-    p.f.Close()
+func (p *Pager) Close() {
+  if p.file != nil {
+    p.file.Close()
   }
   p.pCache.Destroy()
-}
-
-func (p *Pager) Fetch(pgno int) (*PgHdr){
-  if pgno > p.numPage {
-    // log
-    return nil
-  }
-  return p.pCache.FetchPage(pgno)
 }
 
 func (p *Pager) Read(pgno int) (pPg *PgHdr){
@@ -105,8 +95,9 @@ func (p *Pager) Read(pgno int) (pPg *PgHdr){
     return nil
   }
   szPage := p.pCache.szPage
-  n, err := p.f.ReadAt(pPg.pBuf[:szPage], pgno * szPage)
-  if err != nil {
+  pBulk := *(*[]byte)(unsafe.Pointer(pPg.pBulk))
+  n, err := p.file.ReadAt(pBulk[:szPage], int64(pgno * szPage))
+  if err != nil || n != szPage {
     return nil
   }
   return pPg
@@ -119,13 +110,18 @@ func (p *Pager) Write(pPg *PgHdr) int {
   //func Pwrite(fd int, p []byte, offset int64) (n int, err error)
   szPage := p.pCache.szPage
   pgHead := (*PgHead)(pPg.GetPageHeader())
-  //n, err := p.f.WriteAt(pPg.pBuf[:szPage], (pPg.pgno-1) * szPage)
+  pBulk := *(*[]byte)(unsafe.Pointer(pPg.pBulk))
+  n, err := p.file.WriteAt(pBulk[:szPage], int64(pgHead.pgno * szPage - szPage))
+  if err != nil || n != szPage {
+    return 0
+  }
+  //n, err := p.file.WriteAt(pPg.pBulk[:szPage], (pPg.pgno-1) * szPage)
 
   /* Update the database size and return. */
   if(p.numPage < pgHead.pgno){
     p.numPage = pgHead.pgno;
   }
-  return 0
+  return n
 }
 
 /*
@@ -134,22 +130,27 @@ func (p *Pager) Write(pPg *PgHdr) int {
 */
 func (p *Pager) Sync(){
   // sync file func Fdatasync(fd int) (err error)
-  err := syscall.Fdatasync(p.f.Fd())
-  if err != nil {
-    // log
-    return
-  }
+
   // make cache clear
   p.pCache.MakeCleanAll();
 }
 
+
+func (p *Pager) Fetch(pgno int) (*PgHdr){
+  if pgno > p.numPage {
+    // log
+    return nil
+  }
+  return p.pCache.FetchPage(pgno)
+}
+
 func (pgHdr *PgHdr) GetPageHeader() unsafe.Pointer {
-  return unsafe.Pointer(pgHdr.pBuf)
+  return unsafe.Pointer(pgHdr.pBulk)
 }
 
 func (pgHdr *PgHdr) WritePageHeader(flag uint8, ncell, nfree int,
   pgno, ppgno, maxkey int) {
-  pgHead := (*PgHead)(unsafe.Pointer(pgHdr.pBuf))
+  pgHead := (*PgHead)(unsafe.Pointer(pgHdr.pBulk))
   pgHead.flag = flag
   pgHead.ncell = ncell
   pgHead.nfree = nfree

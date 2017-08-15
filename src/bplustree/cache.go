@@ -1,10 +1,10 @@
 /*
-** A complete page cache is an instance of this structure.  Every
-** entry in the cache holds a single page of the database file.  The
+** A complete pgHdr cache is an instance of this structure.  Every
+** entry in the cache holds a single pgHdr of the database file.  The
 ** btree layer only operates on the cached copy of the database pages.
 **
-** A page cache entry is "clean" if it exactly matches what is currently
-** on disk.  A page is "dirty" if it has been modified and needs to be
+** A pgHdr cache entry is "clean" if it exactly matches what is currently
+** on disk.  A pgHdr is "dirty" if it has been modified and needs to be
 ** persisted to disk.
 **
 ** pDirty, pDirtyTail, pSynced:
@@ -23,17 +23,32 @@ import (
 
 /* Allowed values for second argument to ManageDirtyList() */
 const (
-  PCACHE_DIRTYLIST_REMOVE  = 1    /* Remove pPage from dirty list */
-  PCACHE_DIRTYLIST_ADD     = 2    /* Add pPage to the dirty list */
-  PCACHE_DIRTYLIST_FRONT   = 3    /* Move pPage to the front of the list */
+  PCACHE_DIRTYLIST_REMOVE  = 1    /* Remove pgHdr from dirty list */
+  PCACHE_DIRTYLIST_ADD     = 2    /* Add pgHdr to the dirty list */
+  PCACHE_DIRTYLIST_FRONT   = 3    /* Move pgHdr to the front of the list */
+  PGHDR_CLEAN = 1
+  PGHDR_DIRTY = 2
 )
+
+type Bulk struct {
+	addr uintptr
+	len  int
+	cap  int
+}
+
+type PageData Bulk
+type CacheData Bulk
 
 type PCache struct {
   szPage int                         /* Size of database content section */
   szAlloc int                     /* Total size of one pcache line */
   nMin int                  /* Minimum number of pages reserved */
   nMax int                  /* Configured "cache_size" value */
-  pBulk *byte
+  pBulk *CacheData
+  pLru *PgHdr
+  pFree *PgHdr                     /* Next in hash table chain */
+  pDirty *PgHdr                     /* Next in hash table chain */
+  pDirtyTail *PgHdr
 
   /* Hash table of all pages. The following variables may only be accessed
   ** when the accessor is holding the PGroup mutex.
@@ -41,28 +56,29 @@ type PCache struct {
   nPage int                 /* Total number of pages in apHash */
   nInitPage int
   nHash int                /* Number of slots in apHash[] */
-  apHash **PgHdr                    /* Hash table for fast lookup by key */
-  pNext *PgHdr                     /* Next in hash table chain */
-  iKey int                  /* Key value (page number) */
+  apHash []*PgHdr                    /* Hash table for fast lookup by key */
+  iKey int                  /* Key value (pgHdr number) */
 }
 
 /*
-** Every page in the cache is controlled by an instance of the following
+** Every pgHdr in the cache is controlled by an instance of the following
 ** structure.
 **
 ** A Page cache line looks like this:
 **
 **  --------------------------------------------------
-**  |  database page content   |  PgHdr  |  PgHdr  |
+**  |  database pgHdr content   |  PgHdr  |  PgHdr  |
 **  --------------------------------------------------
 */
 type PgHdr struct {
-  pBuf *byte                   /* Page data */
-  pExtra *byte                  /* Extra content */
-  pCache *PCache              /* PRIVATE: Cache that owns this page */
-  pDirty *PgHdr                 /* Transient list of dirty sorted by pgno */
-  pPager *PgHdr                  /* The pager this page is part of */
-  iKey int                     /* Page number for this page */
+  iKey int                     /* Page number for this pgHdr */
+  flag int                     /* Dirty of Clean*/
+  isBulkLocal int
+  pBulk *PageData                   /* Page data */
+
+  pCache *PCache              /* PRIVATE: Cache that owns this pgHdr */
+  pNext *PgHdr                 /* Transient list of dirty sorted by pgno */
+  pFreeNext *PgHdr                 /* Transient list of dirty sorted by pgno */
   pDirtyNext *PgHdr             /* Next element in list of dirty pages */
   pDirtyPrev *PgHdr             /* Previous element in list of dirty pages */
   pLruNext *PgHdr             /* Next in LRU list of unpinned pages */
@@ -90,7 +106,7 @@ func (pCache *PCache) Create(szPage int) {
 ** Try to initialize the pCache.pFree and pCache.pBulk fields.  Return
 ** true if pCache.pFree ends up containing one or more free pages.
 */
-func (pCache *PCache) InitBulk() *[]byte {
+func (pCache *PCache) InitBulk() *PgHdr {
   /* Do not bother with a bulk allocation if the cache size very small */
   var szBulk int
   if pCache.nInitPage>0 {
@@ -98,16 +114,23 @@ func (pCache *PCache) InitBulk() *[]byte {
   } else {
     szBulk = pCache.szAlloc * 1024
   }
-  pBulk := (*byte)(unsafe.Pointer(C.malloc()))//make([]byte, szBulk)
-  pCache.pBulk = pBulk
+  pBulk := C.malloc(C.size_t(szBulk))
 
+  pCache.pBulk = &CacheData{
+    addr: uintptr(unsafe.Pointer(pBulk)),
+    len:  szBulk,
+    cap:  szBulk,
+  }
   nBulk := szBulk/pCache.szAlloc
   for i:= 0; i < nBulk; i++ {
-    pX := (*PgHdr)(unsafe.Pointer(&pBulk[i*pCache.szAlloc]))
-    pX.pBuf = pBulk
-    pX.pNext = pCache.pFree
+    pX := (*PgHdr)(unsafe.Pointer(uintptr(unsafe.Pointer(pBulk))+uintptr(i*pCache.szAlloc)))
+    pX.pBulk = &PageData{
+      addr: uintptr(unsafe.Pointer(pBulk))+uintptr(i*pCache.szAlloc),
+      len:  pCache.szAlloc,
+      cap:  pCache.szAlloc,
+    }
+    pX.pFreeNext = pCache.pFree
     pCache.pFree = pX
-    pBulk += pCache.szAlloc
   }
   return pCache.pFree
 }
@@ -128,74 +151,74 @@ func (pCache *PCache) Destroy(){
 func (pCache *PCache) FetchPage(iKey int) *PgHdr {
 
   /* Step 1: Search the hash table for an existing entry. */
-  pPage := pCache.apHash[iKey % pCache.nHash];
-  for pPage && pPage.iKey!=iKey {
-    pPage = pPage.pNext;
+  /* Step 2: If the pgHdr was found in the hash table, then return it.
+  ** If the pgHdr was not in the hash table continue with
+  ** subsequent steps to try to create the pgHdr. */
+  pgHdr := pCache.apHash[iKey % pCache.nHash];
+  for pgHdr != nil {
+    if pgHdr.iKey == iKey {
+      return pgHdr
+    }
+    pgHdr = pgHdr.pNext
   }
 
-  /* Step 2: If the page was found in the hash table, then return it.
-  ** If the page was not in the hash table continue with
-  ** subsequent steps to try to create the page. */
-  if pPage != nil {
-      return pPage
-  }
-  /* Steps 3 if page num is nearly full resize the hash*/
+  /* Steps 3 if pgHdr num is nearly full resize the hash*/
   if pCache.nPage>=pCache.nHash {
     pCache.ResizeHash()
   }
-  /* Step 4. Try to recycle a page. */
+  /* Step 4. Try to recycle a pgHdr. */
   if pCache.nPage+1 >= pCache.nMax /*|| pcache1UnderMemoryPressure(pCache)*/ {
-    pPage = pGroup.lru.pLruPrev
-    pCache.RemoveFromHash(pPage)
+    pgHdr = pCache.pLru
+    pCache.RemoveFromHash(pgHdr)
   }
-  /* Step 5. If a usable page buffer has still not been found,
+  /* Step 5. If a usable pgHdr buffer has still not been found,
   ** attempt to allocate a new one.
   */
-  if pPage == nil {
-    pPage = pCache.AllocPage(pCache, createFlag==1);
+  if pgHdr == nil {
+    pgHdr = pCache.AllocPage()
   }
 
-  if pPage != nil {
-    h := iKey % pCache.nHash;
-    pCache.nPage++;
-    pPage.iKey = iKey;
-    pPage.pNext = pCache.apHash[h];
-    pPage.pCache = pCache;
-    pPage.pLruPrev = 0;
-    pPage.pLruNext = 0;
-    pPage.isPinned = 1;
-    pCache.apHash[h] = pPage;
-    if( iKey>pCache.iMaxKey ){
-      pCache.iMaxKey = iKey;
-    }
+  if pgHdr != nil {
+    h := iKey % pCache.nHash
+    pCache.nPage++
+    pgHdr.iKey = iKey
+    pgHdr.pNext = pCache.apHash[h]
+    pgHdr.pCache = pCache
+    pgHdr.pLruPrev = nil
+    pgHdr.pLruNext = nil
+    pCache.apHash[h] = pgHdr
   }
-  return pPage;
+  return pgHdr;
 }
 
 /*
-** Allocate a new page object initially associated with cache pCache.
+** Allocate a new pgHdr object initially associated with cache pCache.
 */
 func (pCache *PCache) AllocPage() *PgHdr {
-  if pCache.pFree /*|| (pCache.nPage==0 && pcache1InitBulk(pCache))*/{
-    page := pCache.pFree
-    pCache.pFree = page.pNext
-    page.pNext = 0
-    return page
+  if pCache.pFree != nil/*|| (pCache.nPage==0 && pcache1InitBulk(pCache))*/{
+    pgHdr := pCache.pFree
+    pCache.pFree = pgHdr.pFreeNext
+    pgHdr.pFreeNext = nil
+    return pgHdr
   }
-  pBulk := (*byte)(unsafe.Pointer(C.malloc()))//make([]byte, szBulk)
-  page = (*PgHdr)(unsafe.Pointer(pBulk))
-  page.pBuf = pBulk
-  page.isBulkLocal = 0
-  return page
+  pBulk := C.malloc(C.size_t(pCache.szAlloc))
+  pgHdr := (*PgHdr)(unsafe.Pointer(pBulk))
+  pgHdr.pBulk = &PageData{
+    addr: uintptr(unsafe.Pointer(pBulk)),
+    len:  pCache.szAlloc,
+    cap:  pCache.szAlloc,
+  }
+  pgHdr.isBulkLocal = 0
+  return pgHdr
 }
 
 /*
-** Free a page object allocated by pcache1AllocPage().
+** Free a pgHdr object allocated by pcache1AllocPage().
 */
 func (pCache *PCache) FreePage(p *PgHdr){
 
   // if( p.isBulkLocal ){
-  p.pNext = pCache.pFree;
+  p.pFreeNext = pCache.pFree;
   pCache.pFree = p;
 }
 
@@ -206,7 +229,6 @@ func (pCache *PCache) FreePage(p *PgHdr){
 ** The PCache mutex must be held when this function is called.
 */
 func (pCache *PCache) ResizeHash(){
-
   nNew := pCache.nHash*2;
   if( nNew<256 ){
     nNew = 256;
@@ -225,103 +247,102 @@ func (pCache *PCache) ResizeHash(){
       apNew[h].pNext = pNewPg
     }
   }
-  free(pCacheapHash);
   pCache.apHash = apNew;
   pCache.nHash = nNew;
 }
 
 /*
-** Remove the page supplied as an argument from the hash table
+** Remove the pgHdr supplied as an argument from the hash table
 ** (PCache1.apHash structure) that it is currently stored in.
-** Also free the page if freePage is true.
+** Also free the pgHdr if freePage is true.
 **
 */
-func (pCache *PCache) RemoveFromHash(pPage *PgHdr) {
+func (pCache *PCache) RemoveFromHash(pgHdr *PgHdr) {
 
-  h := pPage.iKey % pCache.nHash
+  h := pgHdr.iKey % pCache.nHash
   p := &pCache.apHash[h]
-  for p; (*p)!=pPage; p=&((*p).pNext) {}
-
-  if p == nil {
-    return
+  for *p != nil {
+    if (*p) == pgHdr {
+      *p = (*p).pNext
+      pCache.nPage--
+      pCache.FreePage(pgHdr)
+      return
+    }
+    p=&((*p).pNext)
   }
-  *p = (*p).pNext
-
-  pCache.nPage--
-  pCache.FreePage(pPage)
 }
 
 /*
-** Manage pPage's participation on the dirty list.  Bits of the addRemove
+** Manage pgHdr's participation on the dirty list.  Bits of the addRemove
 ** argument determines what operation to do.  The 0x01 bit means first
-** remove pPage from the dirty list.  The 0x02 means add pPage back to
-** the dirty list.  Doing both moves pPage to the front of the dirty list.
+** remove pgHdr from the dirty list.  The 0x02 means add pgHdr back to
+** the dirty list.  Doing both moves pgHdr to the front of the dirty list.
 */
-func (pCache *PCache) ManageDirtyList(pPage *PgHdr, addRemove uint8){
+func (pCache *PCache) ManageDirtyList(pgHdr *PgHdr, addRemove uint8){
 
-  if addRemove & PCACHE_DIRTYLIST_REMOVE {
+  if addRemove & PCACHE_DIRTYLIST_REMOVE == 1 {
 
     /* Update the PCache.pSynced variable if necessary. */
-    // if( p.pSynced==pPage ){
-    //   p.pSynced = pPage.pDirtyPrev;
+    // if( p.pSynced==pgHdr ){
+    //   p.pSynced = pgHdr.pDirtyPrev;
     // }
 
-    if pPage.pDirtyNext != nil {
-      pPage.pDirtyNext.pDirtyPrev = pPage.pDirtyPrev;
+    if pgHdr.pDirtyNext != nil {
+      pgHdr.pDirtyNext.pDirtyPrev = pgHdr.pDirtyPrev
     }else{
-      pCache.pDirtyTail = pPage.pDirtyPrev;
+      pCache.pDirtyTail = pgHdr.pDirtyPrev
     }
-    if pPage.pDirtyPrev != nil {
-      pPage.pDirtyPrev.pDirtyNext = pPage.pDirtyNext;
+    if pgHdr.pDirtyPrev != nil {
+      pgHdr.pDirtyPrev.pDirtyNext = pgHdr.pDirtyNext
     }else{
       /* If there are now no dirty pages in the cache, set eCreate to 2.
       ** This is an optimization that allows sqlite3PcacheFetch() to skip
-      ** searching for a dirty page to eject from the cache when it might
+      ** searching for a dirty pgHdr to eject from the cache when it might
       ** otherwise have to.  */
-      pCache.pDirty = pPage.pDirtyNext;
+      pCache.pDirty = pgHdr.pDirtyNext
     }
-    pPage.pDirtyNext = 0;
-    pPage.pDirtyPrev = 0;
+    pgHdr.pDirtyNext = nil
+    pgHdr.pDirtyPrev = nil
   }
-  if( addRemove & PCACHE_DIRTYLIST_ADD ){
-    pPage.pDirtyNext = p.pDirty;
-    if( pPage.pDirtyNext ){
-      pPage.pDirtyNext.pDirtyPrev = pPage;
+  if addRemove & PCACHE_DIRTYLIST_ADD == 1 {
+    pgHdr.pDirtyNext = pCache.pDirty;
+    if pgHdr.pDirtyNext != nil {
+      pgHdr.pDirtyNext.pDirtyPrev = pgHdr;
     }else{
-      pCache.pDirtyTail = pPage;
+      pCache.pDirtyTail = pgHdr;
     }
-    pCache.pDirty = pPage;
+    pCache.pDirty = pgHdr;
   }
 }
 
 /*
-** Make sure the page is marked as dirty. If it isn't dirty already,
+** Make sure the pgHdr is marked as dirty. If it isn't dirty already,
 ** make it so.
 */
-func (pCache *PCache) MakeDirty(p *PgHdr){
-  if p.flags & PGHDR_CLEAN != 0 {
-    p.flags ^= (PGHDR_DIRTY|PGHDR_CLEAN)
-    pCache.ManageDirtyList(p, PCACHE_DIRTYLIST_ADD)
+func (pCache *PCache) MakeDirty(pgHdr *PgHdr){
+  if pgHdr.flag & PGHDR_CLEAN != 0 {
+    pgHdr.flag ^= (PGHDR_DIRTY|PGHDR_CLEAN)
+    pCache.ManageDirtyList(pgHdr, PCACHE_DIRTYLIST_ADD)
   }
 }
 
 /*
-** Make sure the page is marked as clean. If it isn't clean already,
+** Make sure the pgHdr is marked as clean. If it isn't clean already,
 ** make it so.
 */
-func (pCache *PCache) MakeClean(page *PgHdr){
-  if (page.flags & PGHDR_DIRTY) != 0 {
-    pCache.ManageDirtyList(page, PCACHE_DIRTYLIST_REMOVE)
-    page.flags &= ^(PGHDR_DIRTY|PGHDR_NEED_SYNC|PGHDR_WRITEABLE)
-    page.flags |= PGHDR_CLEAN
+func (pCache *PCache) MakeClean(pgHdr *PgHdr){
+  if (pgHdr.flag & PGHDR_DIRTY) != 0 {
+    pCache.ManageDirtyList(pgHdr, PCACHE_DIRTYLIST_REMOVE)
+    pgHdr.flag &= ^(PGHDR_DIRTY)
+    pgHdr.flag |= PGHDR_CLEAN
   }
 }
 
 /*
-** Make every page in the cache clean.
+** Make every pgHdr in the cache clean.
 */
 func (pCache *PCache) MakeCleanAll(){
-  for pCache.pDirty != 0 {
+  for pCache.pDirty != nil {
     p := pCache.pDirty
     pCache.MakeClean(p)
   }
