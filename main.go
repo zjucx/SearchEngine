@@ -22,7 +22,7 @@ func main() {
 		//segment.Segment()
 		//scrawler.Scrawler()
 		//web.Main()
-		bpTree := &BPlusTree{}
+		bpTree := &bplustree.BPlusTree{}
 		bpTree.Open("test.db", 1024)
 
 		/*pBulk := C.malloc(C.size_t(1024))//make([]byte, szBulk)

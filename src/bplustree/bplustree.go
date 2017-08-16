@@ -49,7 +49,7 @@ type Payload struct {
 }
 
 func (bpTree *BPlusTree) Open(dbName string, dbSize int) {
-  //bpTree.pPager = &Pager{}
+  bpTree.pPager = &Pager{}
   pPager := bpTree.pPager
   pPager.Open(dbName, dbSize)
 

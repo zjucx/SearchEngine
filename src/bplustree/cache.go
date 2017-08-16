@@ -167,10 +167,10 @@ func (pCache *PCache) FetchPage(iKey int) *PgHdr {
     pCache.ResizeHash()
   }
   /* Step 4. Try to recycle a pgHdr. */
-  if pCache.nPage+1 >= pCache.nMax /*|| pcache1UnderMemoryPressure(pCache)*/ {
+  /*if pCache.nPage+1 >= pCache.nMax  {
     pgHdr = pCache.pLru
     pCache.RemoveFromHash(pgHdr)
-  }
+  }*/
   /* Step 5. If a usable pgHdr buffer has still not been found,
   ** attempt to allocate a new one.
   */
@@ -188,6 +188,7 @@ func (pCache *PCache) FetchPage(iKey int) *PgHdr {
     pgHdr.pLruNext = nil
     pCache.apHash[h] = pgHdr
   }
+  println("allocpage:%d", len(*(*[]byte)(unsafe.Pointer(pgHdr.pBulk))))
   return pgHdr;
 }
 

@@ -35,6 +35,8 @@ import(
   "unsafe"
   "os"
   "fmt"
+  "encoding/binary"
+  "bytes"
 )
 
 type PgHead struct {
@@ -73,8 +75,11 @@ func (p *Pager) Open(dbName string, szPage int) {
   p.pCache = pCache
 
   if numPage == 0 {
-    pg0 := p.Fetch(0)
-    pg0.WritePageHeader(0, 0, 0, 0, 0, 0)
+    pg0 := p.pCache.FetchPage(0)
+    //println("FetchPage:%d", len(*(*[]byte)(unsafe.Pointer(pg0.pBulk))))
+
+    pg0.WritePageHeader(1, 1, 1, 1, 1, 1)
+    println("FetchPage2:%d", len(*(*[]byte)(unsafe.Pointer(pg0.pBulk))))
     p.Write(pg0)
     p.Sync()
     numPage = 1
@@ -111,6 +116,8 @@ func (p *Pager) Write(pPg *PgHdr) int {
   szPage := p.pCache.szPage
   pgHead := (*PgHead)(pPg.GetPageHeader())
   pBulk := *(*[]byte)(unsafe.Pointer(pPg.pBulk))
+  println(len(pBulk))
+
   n, err := p.file.WriteAt(pBulk[:szPage], int64(pgHead.pgno * szPage - szPage))
   if err != nil || n != szPage {
     return 0
@@ -150,11 +157,31 @@ func (pgHdr *PgHdr) GetPageHeader() unsafe.Pointer {
 
 func (pgHdr *PgHdr) WritePageHeader(flag uint8, ncell, nfree int,
   pgno, ppgno, maxkey int) {
-  pgHead := (*PgHead)(unsafe.Pointer(pgHdr.pBulk))
-  pgHead.flag = flag
-  pgHead.ncell = ncell
-  pgHead.nfree = nfree
-  pgHead.pgno = pgno
-  pgHead.ppgno = ppgno
-  pgHead.maxkey = maxkey
+  buf := *(*[]byte)(unsafe.Pointer(pgHdr.pBulk))
+
+  copy(buf, ToBytes(flag))
+  copy(buf[1:], ToBytes(ncell))
+  copy(buf[5:], ToBytes(ncell))
+  copy(buf[9:], ToBytes(ncell))
+  copy(buf[13:], ToBytes(ncell))
+  copy(buf[17:], ToBytes(ncell))
+  fmt.Printf("len=%d cap=%d slice=%v\n",len(buf),cap(buf),buf)
+
+}
+
+func ToBytes(data interface{}) []byte {
+  buf := new(bytes.Buffer)
+  switch data.(type){
+  case uint8:
+    err := binary.Write(buf, binary.LittleEndian, uint8(data.(uint8)))
+    if err != nil {
+			fmt.Println("binary.Write failed:", err)
+		}
+  case int:
+    err := binary.Write(buf, binary.LittleEndian, int32(data.(int)))
+    if err != nil {
+			fmt.Println("binary.Write failed:", err)
+		}
+  }
+  return buf.Bytes()
 }
