@@ -19,6 +19,8 @@ package bplustree
 import (
   "unsafe"
   "C"
+  "fmt"
+  //"encoding/binary"
 )
 
 /* Allowed values for second argument to ManageDirtyList() */
@@ -91,10 +93,15 @@ type PgHdr struct {
 ** Allocate a new cache.
 */
 func (pCache *PCache) Create(szPage int) {
+  pCache.nPage = 0
+
   pCache.szPage = szPage
-  pCache.szAlloc = szPage + int(unsafe.Sizeof(&PgHdr{}))
+
+  var pgHdr *PgHdr
+  pCache.szAlloc = szPage + int(unsafe.Sizeof(*pgHdr))
   // pcache1EnterMutex(pGroup);
   pCache.ResizeHash()
+  pCache.nMax = pCache.nHash
   // pcache1LeaveMutex(pGroup);
   if( pCache.nHash==0 ){
     pCache.Destroy()
@@ -121,9 +128,11 @@ func (pCache *PCache) InitBulk() *PgHdr {
     len:  szBulk,
     cap:  szBulk,
   }
+
   nBulk := szBulk/pCache.szAlloc
   for i:= 0; i < nBulk; i++ {
-    pX := (*PgHdr)(unsafe.Pointer(uintptr(unsafe.Pointer(pBulk))+uintptr(i*pCache.szAlloc)))
+    pX := (*PgHdr)(unsafe.Pointer(uintptr(unsafe.Pointer(pBulk)) +
+    uintptr(i*pCache.szAlloc) + uintptr(pCache.szPage)))
     pX.pBulk = &PageData{
       addr: uintptr(unsafe.Pointer(pBulk))+uintptr(i*pCache.szAlloc),
       len:  pCache.szAlloc,
@@ -131,6 +140,7 @@ func (pCache *PCache) InitBulk() *PgHdr {
     }
     pX.pFreeNext = pCache.pFree
     pCache.pFree = pX
+
   }
   return pCache.pFree
 }
@@ -167,10 +177,12 @@ func (pCache *PCache) FetchPage(iKey int) *PgHdr {
     pCache.ResizeHash()
   }
   /* Step 4. Try to recycle a pgHdr. */
-  /*if pCache.nPage+1 >= pCache.nMax  {
+  if pCache.nPage+1 >= pCache.nMax  {
     pgHdr = pCache.pLru
-    pCache.RemoveFromHash(pgHdr)
-  }*/
+    if pgHdr != nil {
+      pCache.RemoveFromHash(pgHdr)
+    }
+  }
   /* Step 5. If a usable pgHdr buffer has still not been found,
   ** attempt to allocate a new one.
   */
@@ -183,9 +195,14 @@ func (pCache *PCache) FetchPage(iKey int) *PgHdr {
     pCache.nPage++
     pgHdr.iKey = iKey
     pgHdr.pNext = pCache.apHash[h]
+
     pgHdr.pCache = pCache
     pgHdr.pLruPrev = nil
-    pgHdr.pLruNext = nil
+    pgHdr.pLruNext = pCache.pLru
+    if pCache.pLru != nil {
+      pCache.pLru.pLruPrev = pgHdr
+    }
+    pCache.pLru = pgHdr
     pCache.apHash[h] = pgHdr
   }
   println("allocpage:%d", len(*(*[]byte)(unsafe.Pointer(pgHdr.pBulk))))

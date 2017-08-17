@@ -7,9 +7,10 @@ import (
 	//"invertidx"
 	//"web"
 	"bplustree"
-	//"unsafe"
-	//"C"
-	//"fmt"
+	/*"unsafe"
+	"C"
+	"fmt"*/
+
 )
 type SliceHeader struct {
 	addr uintptr
@@ -32,10 +33,8 @@ func main() {
 		  len:  1024,
 		  cap:  1024,
 		 }
-	  nBulk := 4
-		p := *(*[]byte)(unsafe.Pointer(sl))
-	  for i:= 0; i < nBulk; i++ {
-	    fmt.Println(p[1024])
-			println(len(p))
-	  }*/
+		buf := *(*[]byte)(unsafe.Pointer(sl))
+
+		fmt.Printf("len=%d cap=%d slice=%v\n",len(buf),cap(buf),buf)*/
+
 }

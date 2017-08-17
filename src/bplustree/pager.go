@@ -57,10 +57,11 @@ type Pager struct{
 };
 
 /* Open and close a Pager connection. */
-func (p *Pager) Open(dbName string, szPage int) {
+func (p *Pager) Create(dbName string, szPage int) {
   p.szPage = szPage
   p.dbName = dbName
 
+  // open db file a db file is associated with a pager
   file, err := os.OpenFile(dbName, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
   if err != nil {
 		fmt.Println(err)
@@ -70,16 +71,15 @@ func (p *Pager) Open(dbName string, szPage int) {
   fi, err := os.Stat(dbName)
   numPage := fi.Size()/int64(p.szPage)
 
-  pCache := &PCache{}
-  pCache.Create(szPage)
-  p.pCache = pCache
+  // init cache model
+  p.pCache = &PCache{}
+  p.pCache.Create(szPage)
 
   if numPage == 0 {
+    // get page from cache
     pg0 := p.pCache.FetchPage(0)
-    //println("FetchPage:%d", len(*(*[]byte)(unsafe.Pointer(pg0.pBulk))))
 
     pg0.WritePageHeader(1, 1, 1, 1, 1, 1)
-    println("FetchPage2:%d", len(*(*[]byte)(unsafe.Pointer(pg0.pBulk))))
     p.Write(pg0)
     p.Sync()
     numPage = 1
@@ -166,7 +166,6 @@ func (pgHdr *PgHdr) WritePageHeader(flag uint8, ncell, nfree int,
   copy(buf[13:], ToBytes(ncell))
   copy(buf[17:], ToBytes(ncell))
   fmt.Printf("len=%d cap=%d slice=%v\n",len(buf),cap(buf),buf)
-
 }
 
 func ToBytes(data interface{}) []byte {

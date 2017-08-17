@@ -50,11 +50,11 @@ type Payload struct {
 
 func (bpTree *BPlusTree) Open(dbName string, dbSize int) {
   bpTree.pPager = &Pager{}
-  pPager := bpTree.pPager
-  pPager.Open(dbName, dbSize)
+  bpTree.pPager.Create(dbName, dbSize)
 
-  pgHdr := pPager.Fetch(0)
+  pgHdr := bpTree.pPager.Fetch(0)
   bpTree.page = (*MemPage)(unsafe.Pointer(pgHdr.GetPageHeader()))
+  println("bplustree Open", len(*(*[]byte)(unsafe.Pointer(pgHdr.pBulk))))
 }
 
 func (bpTree *BPlusTree) Insert(pl *Payload) {
