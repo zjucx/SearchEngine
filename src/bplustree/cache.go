@@ -19,7 +19,7 @@ package bplustree
 import (
   "unsafe"
   "C"
-  "fmt"
+  //"fmt"
   //"encoding/binary"
 )
 

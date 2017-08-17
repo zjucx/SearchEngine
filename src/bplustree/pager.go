@@ -151,6 +151,29 @@ func (p *Pager) Fetch(pgno int) (*PgHdr){
   return p.pCache.FetchPage(pgno)
 }
 
+/*
+type Head struct {
+    Cmd byte
+    Version byte
+    Magic   uint16
+    Reserve byte
+    HeadLen byte
+    BodyLen uint16
+}
+
+func NewHead(buf []byte)*Head{
+    head := new(Head)
+
+    head.Cmd     = buf[0]
+    head.Version = buf[1]
+    head.Magic   = binary.BigEndian.Uint16(buf[2:4])
+    head.Reserve = buf[4]
+    head.HeadLen = buf[5]
+    head.BodyLen = binary.BigEndian.Uint16(buf[6:8])
+    return head
+}
+*/
+
 func (pgHdr *PgHdr) GetPageHeader() unsafe.Pointer {
   return unsafe.Pointer(pgHdr.pBulk)
 }
