@@ -41,23 +41,23 @@ import(
 
 type PgHead struct {
   flag  uint8
-  ncell int
-  nfree int                   /* free bytes in current page */
-  pgno  int                  /* page number */
-  ppgno int                  /* parent page number */
-  maxkey int                 /* max key int current page */
+  ncell uint16
+  nfree uint16                   /* free bytes in current page */
+  pgno  uint32                  /* page number */
+  ppgno uint32                  /* parent page number */
+  maxkey uint32                 /* max key int current page */
 }
 
 type Pager struct{
   file *os.File              /* Number of mmap pages currently outstanding */
-  szPage int               /* Number of bytes in a page */
-  numPage int                /* Maximum allowed size of the database */
-  dbName string           /* Name of the database file */
-  pCache *PCache;            /* Pointer to page cache object */
+  szPage  uint16               /* Number of bytes in a page */
+  numPage uint32                /* Maximum allowed size of the database */
+  dbName  string           /* Name of the database file */
+  pCache  *PCache;            /* Pointer to page cache object */
 };
 
 /* Open and close a Pager connection. */
-func (p *Pager) Create(dbName string, szPage int) {
+func (p *Pager) Create(dbName string, szPage uint16) {
   p.szPage = szPage
   p.dbName = dbName
 
@@ -84,7 +84,7 @@ func (p *Pager) Create(dbName string, szPage int) {
     p.Sync()
     numPage = 1
   }
-  p.numPage = int(numPage)
+  p.numPage = uint32(numPage)
 }
 
 func (p *Pager) Close() {
@@ -94,15 +94,15 @@ func (p *Pager) Close() {
   p.pCache.Destroy()
 }
 
-func (p *Pager) Read(pgno int) (pPg *PgHdr){
+func (p *Pager) Read(pgno uint32) (pPg *PgHdr){
   pPg = p.Fetch(pgno)
   if pPg == nil {
     return nil
   }
   szPage := p.pCache.szPage
   pBulk := *(*[]byte)(unsafe.Pointer(pPg.pBulk))
-  n, err := p.file.ReadAt(pBulk[:szPage], int64(pgno * szPage))
-  if err != nil || n != szPage {
+  n, err := p.file.ReadAt(pBulk[:szPage], int64(pgno * uint32(szPage)))
+  if err != nil || n != int(szPage) {
     return nil
   }
   return pPg
@@ -118,8 +118,8 @@ func (p *Pager) Write(pPg *PgHdr) int {
   pBulk := *(*[]byte)(unsafe.Pointer(pPg.pBulk))
   println(len(pBulk))
 
-  n, err := p.file.WriteAt(pBulk[:szPage], int64(pgHead.pgno * szPage - szPage))
-  if err != nil || n != szPage {
+  n, err := p.file.WriteAt(pBulk[:szPage], int64(pgHead.pgno * uint32(szPage) - uint32(szPage)))
+  if err != nil || n != int(szPage) {
     return 0
   }
   //n, err := p.file.WriteAt(pPg.pBulk[:szPage], (pPg.pgno-1) * szPage)
@@ -143,7 +143,7 @@ func (p *Pager) Sync(){
 }
 
 
-func (p *Pager) Fetch(pgno int) (*PgHdr){
+func (p *Pager) Fetch(pgno uint32) (*PgHdr){
   if pgno > p.numPage {
     // log
     return nil
@@ -174,20 +174,29 @@ func NewHead(buf []byte)*Head{
 }
 */
 
-func (pgHdr *PgHdr) GetPageHeader() unsafe.Pointer {
-  return unsafe.Pointer(pgHdr.pBulk)
+func (pgHdr *PgHdr) GetPageHeader() *PgHead {
+  buf := *(*[]byte)(unsafe.Pointer(pgHdr.pBulk))
+  pgHead := &PgHead{
+    flag: buf[0],
+    ncell: binary.LittleEndian.Uint16(buf[1:3]),
+    nfree: binary.LittleEndian.Uint16(buf[3:5]),
+    pgno: binary.LittleEndian.Uint32(buf[5:9]),
+    ppgno: binary.LittleEndian.Uint32(buf[9:13]),
+    maxkey: binary.LittleEndian.Uint32(buf[13:17]),
+  }
+  return pgHead
 }
 
-func (pgHdr *PgHdr) WritePageHeader(flag uint8, ncell, nfree int,
-  pgno, ppgno, maxkey int) {
+func (pgHdr *PgHdr) WritePageHeader(flag uint8, ncell, nfree uint16,
+  pgno, ppgno, maxkey uint32) {
   buf := *(*[]byte)(unsafe.Pointer(pgHdr.pBulk))
 
   copy(buf, ToBytes(flag))
   copy(buf[1:], ToBytes(ncell))
-  copy(buf[5:], ToBytes(ncell))
-  copy(buf[9:], ToBytes(ncell))
-  copy(buf[13:], ToBytes(ncell))
-  copy(buf[17:], ToBytes(ncell))
+  copy(buf[3:], ToBytes(nfree))
+  copy(buf[5:], ToBytes(pgno))
+  copy(buf[9:], ToBytes(ppgno))
+  copy(buf[13:], ToBytes(maxkey))
   fmt.Printf("len=%d cap=%d slice=%v\n",len(buf),cap(buf),buf)
 }
 
@@ -199,11 +208,16 @@ func ToBytes(data interface{}) []byte {
     if err != nil {
 			fmt.Println("binary.Write failed:", err)
 		}
-  case int:
-    err := binary.Write(buf, binary.LittleEndian, int32(data.(int)))
+  case uint16:
+    err := binary.Write(buf, binary.LittleEndian, int16(data.(uint16)))
     if err != nil {
 			fmt.Println("binary.Write failed:", err)
 		}
+  case uint32:
+    err := binary.Write(buf, binary.LittleEndian, int32(data.(uint32)))
+    if err != nil {
+      fmt.Println("binary.Write failed:", err)
+    }
   }
   return buf.Bytes()
 }

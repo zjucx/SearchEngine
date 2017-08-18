@@ -42,10 +42,10 @@ type PageData Bulk
 type CacheData Bulk
 
 type PCache struct {
-  szPage int                         /* Size of database content section */
-  szAlloc int                     /* Total size of one pcache line */
-  nMin int                  /* Minimum number of pages reserved */
-  nMax int                  /* Configured "cache_size" value */
+  szPage uint16                         /* Size of database content section */
+  szAlloc uint16                     /* Total size of one pcache line */
+  nMin uint32                  /* Minimum number of pages reserved */
+  nMax uint32                  /* Configured "cache_size" value */
   pBulk *CacheData
   pLru *PgHdr
   pFree *PgHdr                     /* Next in hash table chain */
@@ -55,11 +55,11 @@ type PCache struct {
   /* Hash table of all pages. The following variables may only be accessed
   ** when the accessor is holding the PGroup mutex.
   */
-  nPage int                 /* Total number of pages in apHash */
-  nInitPage int
-  nHash int                /* Number of slots in apHash[] */
+  nPage uint32                 /* Total number of pages in apHash */
+  nInitPage uint16
+  nHash uint32                /* Number of slots in apHash[] */
   apHash []*PgHdr                    /* Hash table for fast lookup by key */
-  iKey int                  /* Key value (pgHdr number) */
+  iKey uint32                  /* Key value (pgHdr number) */
 }
 
 /*
@@ -73,7 +73,7 @@ type PCache struct {
 **  --------------------------------------------------
 */
 type PgHdr struct {
-  iKey int                     /* Page number for this pgHdr */
+  iKey uint32                     /* Page number for this pgHdr */
   flag int                     /* Dirty of Clean*/
   isBulkLocal int
   pBulk *PageData                   /* Page data */
@@ -92,13 +92,13 @@ type PgHdr struct {
 **
 ** Allocate a new cache.
 */
-func (pCache *PCache) Create(szPage int) {
+func (pCache *PCache) Create(szPage uint16) {
   pCache.nPage = 0
 
   pCache.szPage = szPage
 
   var pgHdr *PgHdr
-  pCache.szAlloc = szPage + int(unsafe.Sizeof(*pgHdr))
+  pCache.szAlloc = szPage + uint16(unsafe.Sizeof(*pgHdr))
   // pcache1EnterMutex(pGroup);
   pCache.ResizeHash()
   pCache.nMax = pCache.nHash
@@ -117,9 +117,9 @@ func (pCache *PCache) InitBulk() *PgHdr {
   /* Do not bother with a bulk allocation if the cache size very small */
   var szBulk int
   if pCache.nInitPage>0 {
-    szBulk = pCache.szAlloc * pCache.nInitPage
+    szBulk = int(pCache.szAlloc * pCache.nInitPage)
   } else {
-    szBulk = pCache.szAlloc * 1024
+    szBulk = int(pCache.szAlloc * 1024)
   }
   pBulk := C.malloc(C.size_t(szBulk))
 
@@ -129,14 +129,14 @@ func (pCache *PCache) InitBulk() *PgHdr {
     cap:  szBulk,
   }
 
-  nBulk := szBulk/pCache.szAlloc
-  for i:= 0; i < nBulk; i++ {
+  nBulk := szBulk/int(pCache.szAlloc)
+  for i:= uint16(0); i < uint16(nBulk); i++ {
     pX := (*PgHdr)(unsafe.Pointer(uintptr(unsafe.Pointer(pBulk)) +
     uintptr(i*pCache.szAlloc) + uintptr(pCache.szPage)))
     pX.pBulk = &PageData{
       addr: uintptr(unsafe.Pointer(pBulk))+uintptr(i*pCache.szAlloc),
-      len:  pCache.szAlloc,
-      cap:  pCache.szAlloc,
+      len:  int(pCache.szAlloc),
+      cap:  int(pCache.szAlloc),
     }
     pX.pFreeNext = pCache.pFree
     pCache.pFree = pX
@@ -158,7 +158,7 @@ func (pCache *PCache) Destroy(){
   // free(pCache);
 }
 
-func (pCache *PCache) FetchPage(iKey int) *PgHdr {
+func (pCache *PCache) FetchPage(iKey uint32) *PgHdr {
 
   /* Step 1: Search the hash table for an existing entry. */
   /* Step 2: If the pgHdr was found in the hash table, then return it.
@@ -223,8 +223,8 @@ func (pCache *PCache) AllocPage() *PgHdr {
   pgHdr := (*PgHdr)(unsafe.Pointer(pBulk))
   pgHdr.pBulk = &PageData{
     addr: uintptr(unsafe.Pointer(pBulk)),
-    len:  pCache.szAlloc,
-    cap:  pCache.szAlloc,
+    len:  int(pCache.szAlloc),
+    cap:  int(pCache.szAlloc),
   }
   pgHdr.isBulkLocal = 0
   return pgHdr
@@ -254,7 +254,7 @@ func (pCache *PCache) ResizeHash(){
 
   apNew := make([]*PgHdr, nNew);
 
-  for i:=0; i<pCache.nHash; i++{
+  for i:= uint32(0); i<pCache.nHash; i++{
     pCurPg := pCache.apHash[i];
     for pCurPg != nil {
       h := pCurPg.iKey % nNew;

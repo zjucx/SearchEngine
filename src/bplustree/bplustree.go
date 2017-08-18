@@ -33,8 +33,8 @@ type MemPage PgHead
 **   --------------------------------------------------------------
 */
 type Cell struct {
-  ptr      int      /* page number or Offset of the page start of a payload */
-  key      int      /* The key for Payload*/
+  ptr      uint32      /* page number or Offset of the page start of a payload */
+  key      uint32      /* The key for Payload*/
 }
 
 /* DocId1 DocId2 ...
@@ -43,12 +43,12 @@ type Cell struct {
 **   -----------------------------------------------------------------
  */
 type Payload struct {
-  key     int             /* value in the unpacked key */
-  size    int             /* Number of values.  Might be zero */
+  key     uint32             /* value in the unpacked key */
+  size    uint16             /* Number of values.  Might be zero */
   entrys  *[]byte            /* fot data compress */
 }
 
-func (bpTree *BPlusTree) Open(dbName string, dbSize int) {
+func (bpTree *BPlusTree) Open(dbName string, dbSize uint16) {
   bpTree.pPager = &Pager{}
   bpTree.pPager.Create(dbName, dbSize)
 
@@ -58,12 +58,12 @@ func (bpTree *BPlusTree) Open(dbName string, dbSize int) {
 }
 
 func (bpTree *BPlusTree) Insert(pl *Payload) {
-  of, pg := bpTree.Search(pl.key)
+  _, pg := bpTree.Search(pl.key)
   if pg == nil {
     return
   }
 
-  ok, newpg := pg.insert(bpTree, of, pl)
+  ok, newpg := pg.insert(bpTree, pl)
   if ok {
     return
   }
@@ -76,7 +76,7 @@ func (bpTree *BPlusTree) Insert(pl *Payload) {
   ppg := (*MemPage)(unsafe.Pointer(pgHdr.GetPageHeader()))
 
   for {
-    ok, newpg = ppg.insert(bpTree, 0, &Cell{key: newpg.maxkey,ptr: newpg.pgno})
+    ok, newpg = ppg.insert(bpTree, &Cell{key: newpg.maxkey,ptr: newpg.pgno})
     if ok {
       return
     }
@@ -86,10 +86,10 @@ func (bpTree *BPlusTree) Insert(pl *Payload) {
       // move rootpage data to newpage
 
       // insert new page cell
-      bpTree.page.insert(bpTree, 0, &Cell{key: newpg.maxkey,ptr: newpg.pgno})
+      bpTree.page.insert(bpTree, &Cell{key: newpg.maxkey,ptr: newpg.pgno})
 
       // insert origin page cell
-      bpTree.page.insert(bpTree, 0, &Cell{key: pg.maxkey,ptr: pg.pgno})
+      bpTree.page.insert(bpTree, &Cell{key: pg.maxkey,ptr: pg.pgno})
       return
     }
 
@@ -102,7 +102,7 @@ func (bpTree *BPlusTree) Insert(pl *Payload) {
   }
 }
 
-func (bpTree *BPlusTree) Search(key int) (int, *MemPage) {
+func (bpTree *BPlusTree) Search(key uint32) (uint32, *MemPage) {
   curr := (*MemPage)(unsafe.Pointer(bpTree.page))
   for {
     switch curr.flag {
@@ -127,7 +127,7 @@ func (bpTree *BPlusTree) Search(key int) (int, *MemPage) {
   }
 }
 
-func (page *MemPage) insert(bpTree *BPlusTree, offset int, data interface{}) (bool, *MemPage){
+func (page *MemPage) insert(bpTree *BPlusTree, data interface{}) (bool, *MemPage){
   ok := page.full(data)
   if !ok {
     return true, nil
@@ -144,7 +144,7 @@ func (page *MemPage) insert(bpTree *BPlusTree, offset int, data interface{}) (bo
   return false, newpg
 }
 
-func (page *MemPage) find(key int) (int, bool) {
+func (page *MemPage) find(key uint32) (uint32, bool) {
   /*if  page.pgno == 0 && page.ncell == 0 {
     return 1, false
   }
@@ -175,11 +175,11 @@ func (bpTree *BPlusTree) NewPage() *MemPage{
   return (*MemPage)(unsafe.Pointer(pgHdr.GetPageHeader()))
 }
 
-func (page *MemPage) parent() int {
+func (page *MemPage) parent() uint32 {
   return page.ppgno
 }
 
-func (page *MemPage) setparent(pgno int) {
+func (page *MemPage) setparent(pgno uint32) {
   page.ppgno = pgno
 }
 
@@ -188,12 +188,12 @@ func (page *MemPage) full(data interface{}) bool {
   switch data.(type){
   case *Cell:
     if page.flag == INTERPAGE {
-      return page.nfree < int(unsafe.Sizeof(&Cell{}))
+      return page.nfree < uint16(unsafe.Sizeof(&Cell{}))
     }
     panic("full error")
   case *Payload:
     if page.flag == LEAFPAGE {
-      return page.nfree < (data.(Payload).size + int(unsafe.Sizeof(&Cell{})))
+      return page.nfree < (data.(Payload).size + uint16(unsafe.Sizeof(&Cell{})))
     }
     panic("full error")
   }
@@ -201,7 +201,7 @@ func (page *MemPage) full(data interface{}) bool {
   return true
 }
 
-func (page *MemPage) cellptr(i int) *Cell {
+func (page *MemPage) cellptr(i uint16) *Cell {
   return (*Cell)(unsafe.Pointer(uintptr(unsafe.Pointer(page)) +
   uintptr(unsafe.Sizeof(&MemPage{})) +
   uintptr(i)*unsafe.Sizeof(&Cell{})))
