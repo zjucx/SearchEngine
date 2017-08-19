@@ -45,7 +45,7 @@ type Cell struct {
 type Payload struct {
   key     uint32             /* value in the unpacked key */
   size    uint16             /* Number of values.  Might be zero */
-  entrys  *[]byte            /* fot data compress */
+  entrys  *uint32            /* fot data compress */
 }
 
 func (bpTree *BPlusTree) Open(dbName string, dbSize uint16) {
@@ -53,7 +53,7 @@ func (bpTree *BPlusTree) Open(dbName string, dbSize uint16) {
   bpTree.pPager.Create(dbName, dbSize)
 
   pgHdr := bpTree.pPager.Fetch(0)
-  bpTree.page = (*MemPage)(unsafe.Pointer(pgHdr.GetPageHeader()))
+  bpTree.page = (*MemPage)(unsafe.Pointer(pgHdr.GetHeader()))
   println("bplustree Open", len(*(*[]byte)(unsafe.Pointer(pgHdr.pBulk))))
 }
 
@@ -73,7 +73,7 @@ func (bpTree *BPlusTree) Insert(pl *Payload) {
   if pgHdr == nil {
     panic("")
   }
-  ppg := (*MemPage)(unsafe.Pointer(pgHdr.GetPageHeader()))
+  ppg := (*MemPage)(unsafe.Pointer(pgHdr.GetHeader()))
 
   for {
     ok, newpg = ppg.insert(bpTree, &Cell{key: newpg.maxkey,ptr: newpg.pgno})
@@ -98,7 +98,7 @@ func (bpTree *BPlusTree) Insert(pl *Payload) {
     if pgHdr == nil {
       panic("")
     }
-    ppg = (*MemPage)(unsafe.Pointer(pgHdr.GetPageHeader()))
+    ppg = (*MemPage)(unsafe.Pointer(pgHdr.GetHeader()))
   }
 }
 
@@ -120,7 +120,7 @@ func (bpTree *BPlusTree) Search(key uint32) (uint32, *MemPage) {
       if pgHdr == nil {
         panic("")
       }
-      curr = (*MemPage)(unsafe.Pointer(pgHdr.GetPageHeader()))
+      curr = (*MemPage)(unsafe.Pointer(pgHdr.GetHeader()))
     default:
       panic("no such flag!")
     }
@@ -172,7 +172,7 @@ func (bpTree *BPlusTree) NewPage() *MemPage{
   pPager := bpTree.pPager
   pPager.numPage += 1
   pgHdr := pPager.Fetch(pPager.numPage)
-  return (*MemPage)(unsafe.Pointer(pgHdr.GetPageHeader()))
+  return (*MemPage)(unsafe.Pointer(pgHdr.GetHeader()))
 }
 
 func (page *MemPage) parent() uint32 {

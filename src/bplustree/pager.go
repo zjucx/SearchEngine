@@ -75,14 +75,18 @@ func (p *Pager) Create(dbName string, szPage uint16) {
   p.pCache = &PCache{}
   p.pCache.Create(szPage)
 
-  if numPage == 0 {
-    // get page from cache
-    pg0 := p.pCache.FetchPage(0)
+  // get page from cache
+  var pg0 *PgHdr
 
-    pg0.WritePageHeader(1, 1, 1, 1, 1, 1)
+  if numPage == 0 {
+    pg0 = p.Fetch(0)
+    pg0.WriteHeader(1, 1, 1, 1, 1, 1)
+    pg0.GetHeader()
     p.Write(pg0)
     p.Sync()
     numPage = 1
+  } else {
+    pg0 = p.Read(0)
   }
   p.numPage = uint32(numPage)
 }
@@ -97,8 +101,10 @@ func (p *Pager) Close() {
 func (p *Pager) Read(pgno uint32) (pPg *PgHdr){
   pPg = p.Fetch(pgno)
   if pPg == nil {
+    fmt.Println("get page from cache error!")
     return nil
   }
+
   szPage := p.pCache.szPage
   pBulk := *(*[]byte)(unsafe.Pointer(pPg.pBulk))
   n, err := p.file.ReadAt(pBulk[:szPage], int64(pgno * uint32(szPage)))
@@ -114,7 +120,7 @@ func (p *Pager) Write(pPg *PgHdr) int {
   p.pCache.MakeDirty(pPg);
   //func Pwrite(fd int, p []byte, offset int64) (n int, err error)
   szPage := p.pCache.szPage
-  pgHead := (*PgHead)(pPg.GetPageHeader())
+  pgHead := (*PgHead)(pPg.GetHeader())
   pBulk := *(*[]byte)(unsafe.Pointer(pPg.pBulk))
   println(len(pBulk))
 
@@ -142,12 +148,7 @@ func (p *Pager) Sync(){
   p.pCache.MakeCleanAll();
 }
 
-
 func (p *Pager) Fetch(pgno uint32) (*PgHdr){
-  if pgno > p.numPage {
-    // log
-    return nil
-  }
   return p.pCache.FetchPage(pgno)
 }
 
@@ -163,7 +164,6 @@ type Head struct {
 
 func NewHead(buf []byte)*Head{
     head := new(Head)
-
     head.Cmd     = buf[0]
     head.Version = buf[1]
     head.Magic   = binary.BigEndian.Uint16(buf[2:4])
@@ -174,8 +174,9 @@ func NewHead(buf []byte)*Head{
 }
 */
 
-func (pgHdr *PgHdr) GetPageHeader() *PgHead {
+func (pgHdr *PgHdr) GetHeader() *PgHead {
   buf := *(*[]byte)(unsafe.Pointer(pgHdr.pBulk))
+  fmt.Printf("len=%d cap=%d slice=%v\n",len(buf),cap(buf),buf)
   pgHead := &PgHead{
     flag: buf[0],
     ncell: binary.LittleEndian.Uint16(buf[1:3]),
@@ -184,10 +185,11 @@ func (pgHdr *PgHdr) GetPageHeader() *PgHead {
     ppgno: binary.LittleEndian.Uint32(buf[9:13]),
     maxkey: binary.LittleEndian.Uint32(buf[13:17]),
   }
+  fmt.Printf("len=%d cap=%d\n",pgHead.flag, pgHead.nfree)
   return pgHead
 }
 
-func (pgHdr *PgHdr) WritePageHeader(flag uint8, ncell, nfree uint16,
+func (pgHdr *PgHdr) WriteHeader(flag uint8, ncell, nfree uint16,
   pgno, ppgno, maxkey uint32) {
   buf := *(*[]byte)(unsafe.Pointer(pgHdr.pBulk))
 
