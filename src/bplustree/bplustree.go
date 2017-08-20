@@ -3,6 +3,7 @@ package bplustree
 import (
   "unsafe"
   //"sort"
+  "fmt"
 )
 
 const (
@@ -43,9 +44,9 @@ type Cell struct {
 **   -----------------------------------------------------------------
  */
 type Payload struct {
-  key     uint32             /* value in the unpacked key */
-  size    uint16             /* Number of values.  Might be zero */
-  entrys  *uint32            /* fot data compress */
+  Key     uint32             /* value in the unpacked key */
+  Size    uint16             /* Number of values.  Might be zero */
+  Entrys  []uint32            /* fot data compress */
 }
 
 func (bpTree *BPlusTree) Open(dbName string, dbSize uint16) {
@@ -58,16 +59,17 @@ func (bpTree *BPlusTree) Open(dbName string, dbSize uint16) {
 }
 
 func (bpTree *BPlusTree) Insert(pl *Payload) {
-  _, pg := bpTree.Search(pl.key)
+  pg := bpTree.Search(pl.Key)
   if pg == nil {
     return
   }
+  fmt.Printf("flag=%d pgno=%d\n",pg.flag, pg.pgno)
 
   ok, newpg := pg.insert(bpTree, pl)
   if ok {
     return
   }
-
+fmt.Printf("flag=%d pgno=%d\n",pg.flag, pg.pgno)
   // get parent page
   pgHdr := bpTree.pPager.Read(pg.parent())
   if pgHdr == nil {
@@ -102,16 +104,13 @@ func (bpTree *BPlusTree) Insert(pl *Payload) {
   }
 }
 
-func (bpTree *BPlusTree) Search(key uint32) (uint32, *MemPage) {
+func (bpTree *BPlusTree) Search(key uint32) (*MemPage) {
   curr := (*MemPage)(unsafe.Pointer(bpTree.page))
+
   for {
     switch curr.flag {
     case LEAFPAGE:
-      of, ok := curr.find(key)
-      if !ok {
-        return 0, curr
-      }
-      return of, curr
+      return curr
     case INTERPAGE:
       pgno, _ := curr.find(key)
       // curr = bpTree.hm[pgno]
@@ -132,9 +131,8 @@ func (page *MemPage) insert(bpTree *BPlusTree, data interface{}) (bool, *MemPage
   if !ok {
     return true, nil
   }
-
   //key, newpg :=split(pg)
-  newpg := bpTree.NewPage()
+   newpg := bpTree.NewPage()
   //update page info
   newpg.maxkey = page.maxkey
 
@@ -145,27 +143,27 @@ func (page *MemPage) insert(bpTree *BPlusTree, data interface{}) (bool, *MemPage
 }
 
 func (page *MemPage) find(key uint32) (uint32, bool) {
-  /*if  page.pgno == 0 && page.ncell == 0 {
-    return 1, false
+  switch page.flag {
+    case LEAFPAGE:
+      return 0, true
+    case INTERPAGE:
+      if page.ncell == 0 {
+        return 1, false
+      }
+
+      bIdx := uint16(0)
+      eIdx := page.ncell
+      for bIdx != eIdx {
+        if key > page.cellptr(bIdx).key {
+          bIdx = (bIdx + eIdx)/2
+        } else {
+          eIdx = (bIdx + eIdx)/2
+        }
+      }
+      return page.cellptr(bIdx).ptr, true
+    default:
+      panic("no such flag!")
   }
-
-  pcell := page.cellptr(0)
-
-  cmp := func (i int) bool {
-    return page.cellptr(i).key >= key
-  }
-
-  i := sort.Search(page.ncell, cmp)
-
-  if page.flag == INTERPAGE {
-    return page.cellptr(i).ptr, true
-  }
-
-  if i <= page.ncell && page.cellptr(i).key == key {
-    return page.cellptr(i).ptr, true
-  }*/
-
-  return 0, false
 }
 
 func (bpTree *BPlusTree) NewPage() *MemPage{
@@ -186,18 +184,16 @@ func (page *MemPage) setparent(pgno uint32) {
 func (page *MemPage) full(data interface{}) bool {
   // insert payload sorted by pl.key todo later...
   switch data.(type){
-  case *Cell:
-    if page.flag == INTERPAGE {
-      return page.nfree < uint16(unsafe.Sizeof(&Cell{}))
-    }
-    panic("full error")
-  case *Payload:
-    if page.flag == LEAFPAGE {
-      return page.nfree < (data.(Payload).size + uint16(unsafe.Sizeof(&Cell{})))
-    }
-    panic("full error")
+    case *Cell:
+      if page.flag == INTERPAGE {
+        return page.nfree < uint16(unsafe.Sizeof(*&Cell{}))
+      }
+    case *Payload:
+      if page.flag == LEAFPAGE {
+        return page.nfree < (data.(*Payload).Size + uint16(unsafe.Sizeof(*&Cell{})))
+      }
   }
-  panic("tyoe error")
+  fmt.Printf("no such type\n")
   return true
 }
 

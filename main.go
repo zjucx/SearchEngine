@@ -26,6 +26,11 @@ func main() {
 		bpTree := &bplustree.BPlusTree{}
 		bpTree.Open("test.db", 1024)
 
+		bpTree.Insert(&bplustree.Payload{
+			Key: 1,
+			Size: 26,
+			Entrys: []uint32{1, 2 , 3, 4, 5},
+		})
 		/*pBulk := C.malloc(C.size_t(1024))//make([]byte, szBulk)
 
 		sl := &SliceHeader{

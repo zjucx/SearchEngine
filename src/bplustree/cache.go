@@ -205,7 +205,6 @@ func (pCache *PCache) FetchPage(iKey uint32) *PgHdr {
     pCache.pLru = pgHdr
     pCache.apHash[h] = pgHdr
   }
-  println("allocpage:%d", len(*(*[]byte)(unsafe.Pointer(pgHdr.pBulk))))
   return pgHdr;
 }
 

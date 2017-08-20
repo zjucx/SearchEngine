@@ -77,16 +77,20 @@ func (p *Pager) Create(dbName string, szPage uint16) {
 
   // get page from cache
   var pg0 *PgHdr
+  var pg1 *PgHdr
 
   if numPage == 0 {
     pg0 = p.Fetch(0)
-    pg0.WriteHeader(1, 1, 1, 1, 1, 1)
-    pg0.GetHeader()
+    pg0.WriteHeader(1, 0, 1024, 0, 0, 0)
     p.Write(pg0)
+    pg1 = p.Fetch(1)
+    pg1.WriteHeader(0, 0, 1024, 1, 0, 0)
+    p.Write(pg1)
     p.Sync()
-    numPage = 1
+    numPage = 2
   } else {
     pg0 = p.Read(0)
+    pg1 = p.Read(1)
   }
   p.numPage = uint32(numPage)
 }
@@ -124,7 +128,7 @@ func (p *Pager) Write(pPg *PgHdr) int {
   pBulk := *(*[]byte)(unsafe.Pointer(pPg.pBulk))
   println(len(pBulk))
 
-  n, err := p.file.WriteAt(pBulk[:szPage], int64(pgHead.pgno * uint32(szPage) - uint32(szPage)))
+  n, err := p.file.WriteAt(pBulk[:szPage], int64(pgHead.pgno * uint32(szPage)))
   if err != nil || n != int(szPage) {
     return 0
   }
@@ -143,7 +147,7 @@ func (p *Pager) Write(pPg *PgHdr) int {
 */
 func (p *Pager) Sync(){
   // sync file func Fdatasync(fd int) (err error)
-
+  p.file.Sync()
   // make cache clear
   p.pCache.MakeCleanAll();
 }
@@ -176,7 +180,6 @@ func NewHead(buf []byte)*Head{
 
 func (pgHdr *PgHdr) GetHeader() *PgHead {
   buf := *(*[]byte)(unsafe.Pointer(pgHdr.pBulk))
-  fmt.Printf("len=%d cap=%d slice=%v\n",len(buf),cap(buf),buf)
   pgHead := &PgHead{
     flag: buf[0],
     ncell: binary.LittleEndian.Uint16(buf[1:3]),
@@ -185,7 +188,6 @@ func (pgHdr *PgHdr) GetHeader() *PgHead {
     ppgno: binary.LittleEndian.Uint32(buf[9:13]),
     maxkey: binary.LittleEndian.Uint32(buf[13:17]),
   }
-  fmt.Printf("len=%d cap=%d\n",pgHead.flag, pgHead.nfree)
   return pgHead
 }
 
@@ -199,7 +201,6 @@ func (pgHdr *PgHdr) WriteHeader(flag uint8, ncell, nfree uint16,
   copy(buf[5:], ToBytes(pgno))
   copy(buf[9:], ToBytes(ppgno))
   copy(buf[13:], ToBytes(maxkey))
-  fmt.Printf("len=%d cap=%d slice=%v\n",len(buf),cap(buf),buf)
 }
 
 func ToBytes(data interface{}) []byte {
