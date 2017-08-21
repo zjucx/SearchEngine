@@ -4,6 +4,8 @@ import (
   "unsafe"
   //"sort"
   "fmt"
+  "bytes"
+  "encoding/binary"
 )
 
 const (
@@ -69,7 +71,7 @@ func (bpTree *BPlusTree) Insert(pl *Payload) {
   if ok {
     return
   }
-fmt.Printf("flag=%d pgno=%d\n",pg.flag, pg.pgno)
+
   // get parent page
   pgHdr := bpTree.pPager.Read(pg.parent())
   if pgHdr == nil {
@@ -127,12 +129,53 @@ func (bpTree *BPlusTree) Search(key uint32) (*MemPage) {
 }
 
 func (page *MemPage) insert(bpTree *BPlusTree, data interface{}) (bool, *MemPage){
-  ok := page.full(data)
-  if !ok {
-    return true, nil
+  switch data.(type){
+    case *Cell:
+      if page.flag == INTERPAGE &&
+         page.nfree >= uint16(unsafe.Sizeof(*&Cell{})) {
+
+      }
+    case *Payload:
+      plbuf := new(bytes.Buffer)
+      clbuf := new(bytes.Buffer)
+      pgHdr := bpTree.pPager.Fetch(page.pgno)
+      pagebuf := *(*[]byte)(unsafe.Pointer(pgHdr.pBulk))
+      plof := uint16(unsafe.Sizeof(*&MemPage{})) + page.nfree +
+              uint16(unsafe.Sizeof(*&Cell{})) * page.ncell
+      clof := uint16(unsafe.Sizeof(*&MemPage{})) +
+              uint16(unsafe.Sizeof(*&Cell{})) * page.ncell
+
+      if page.flag == LEAFPAGE  &&
+         page.nfree >= (data.(*Payload).Size + uint16(unsafe.Sizeof(*&Cell{}))) {
+
+         // write payload to page date
+        binary.Write(plbuf, binary.LittleEndian, data.(*Payload).Key)
+        binary.Write(plbuf, binary.LittleEndian, data.(*Payload).Size)
+        for _, v := range data.(*Payload).Entrys {
+            err := binary.Write(plbuf, binary.LittleEndian, v)
+            if err != nil {
+                fmt.Println("binary.Write failed:", err)
+            }
+        }
+        fmt.Println("after write ，buf is:",plbuf.Bytes())
+        copy(pagebuf[plof-data.(*Payload).Size:], plbuf.Bytes())
+        // write cell for this payload to page date
+        binary.Write(clbuf, binary.LittleEndian, data.(*Payload).Key)
+        binary.Write(clbuf, binary.LittleEndian, data.(*Payload).Size)
+        copy(pagebuf[clof:], clbuf.Bytes())
+
+        // write page head to page data
+        page.nfree -= (data.(*Payload).Size + uint16(unsafe.Sizeof(*&Cell{})))
+        page.ncell += 1
+        if page.maxkey < data.(*Payload).Key {
+          page.maxkey = data.(*Payload).Key
+        }
+        pgHdr.WriteHeader(page.flag, page.ncell, page.nfree, page.pgno, page.ppgno, page.maxkey)
+        fmt.Printf("free=%d len=%d cap=%d slice=%v\n",clof, len(pagebuf),cap(pagebuf),pagebuf[0:1024])
+      }
   }
   //key, newpg :=split(pg)
-   newpg := bpTree.NewPage()
+  newpg := bpTree.NewPage()
   //update page info
   newpg.maxkey = page.maxkey
 
@@ -183,16 +226,7 @@ func (page *MemPage) setparent(pgno uint32) {
 
 func (page *MemPage) full(data interface{}) bool {
   // insert payload sorted by pl.key todo later...
-  switch data.(type){
-    case *Cell:
-      if page.flag == INTERPAGE {
-        return page.nfree < uint16(unsafe.Sizeof(*&Cell{}))
-      }
-    case *Payload:
-      if page.flag == LEAFPAGE {
-        return page.nfree < (data.(*Payload).Size + uint16(unsafe.Sizeof(*&Cell{})))
-      }
-  }
+
   fmt.Printf("no such type\n")
   return true
 }

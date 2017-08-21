@@ -81,10 +81,10 @@ func (p *Pager) Create(dbName string, szPage uint16) {
 
   if numPage == 0 {
     pg0 = p.Fetch(0)
-    pg0.WriteHeader(1, 0, 1024, 0, 0, 0)
+    pg0.WriteHeader(1, 0, 1024-uint16(unsafe.Sizeof(*&PgHead{})), 0, 0, 0)
     p.Write(pg0)
     pg1 = p.Fetch(1)
-    pg1.WriteHeader(0, 0, 1024, 1, 0, 0)
+    pg1.WriteHeader(0, 0, 1024-uint16(unsafe.Sizeof(*&PgHead{})), 1, 0, 0)
     p.Write(pg1)
     p.Sync()
     numPage = 2
@@ -193,14 +193,22 @@ func (pgHdr *PgHdr) GetHeader() *PgHead {
 
 func (pgHdr *PgHdr) WriteHeader(flag uint8, ncell, nfree uint16,
   pgno, ppgno, maxkey uint32) {
-  buf := *(*[]byte)(unsafe.Pointer(pgHdr.pBulk))
-
-  copy(buf, ToBytes(flag))
+  pagebuf := *(*[]byte)(unsafe.Pointer(pgHdr.pBulk))
+  buf := new(bytes.Buffer)
+  binary.Write(buf,binary.LittleEndian, flag)
+  binary.Write(buf,binary.LittleEndian, ncell)
+  binary.Write(buf,binary.LittleEndian, nfree)
+  binary.Write(buf,binary.LittleEndian, pgno)
+  binary.Write(buf,binary.LittleEndian, ppgno)
+  binary.Write(buf,binary.LittleEndian, maxkey)
+  fmt.Println("after write ，buf is:",buf.Bytes())
+  copy(pagebuf, buf.Bytes())
+  /*copy(buf, ToBytes(flag))
   copy(buf[1:], ToBytes(ncell))
   copy(buf[3:], ToBytes(nfree))
   copy(buf[5:], ToBytes(pgno))
   copy(buf[9:], ToBytes(ppgno))
-  copy(buf[13:], ToBytes(maxkey))
+  copy(buf[13:], ToBytes(maxkey))*/
 }
 
 func ToBytes(data interface{}) []byte {
