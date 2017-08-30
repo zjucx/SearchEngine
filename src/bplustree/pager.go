@@ -54,7 +54,7 @@ type Pager struct{
   numPage uint32                /* Maximum allowed size of the database */
   dbName  string           /* Name of the database file */
   pCache  *PCache;            /* Pointer to page cache object */
-};
+}
 
 /* Open and close a Pager connection. */
 func (p *Pager) Create(dbName string, szPage uint16) {
@@ -81,10 +81,10 @@ func (p *Pager) Create(dbName string, szPage uint16) {
 
   if numPage == 0 {
     pg0 = p.Fetch(0)
-    pg0.WriteHeader(1, 0, 1024-uint16(unsafe.Sizeof(*&PgHead{})), 0, 0, 0)
+    pg0.WriteHeader(1, 0, szPage-uint16(unsafe.Sizeof(*&PgHead{})), 0, 0, 0)
     p.Write(pg0)
     pg1 = p.Fetch(1)
-    pg1.WriteHeader(0, 0, 1024-uint16(unsafe.Sizeof(*&PgHead{})), 1, 0, 0)
+    pg1.WriteHeader(0, 0, szPage-uint16(unsafe.Sizeof(*&PgHead{})), 1, 0, 0)
     p.Write(pg1)
     p.Sync()
     numPage = 2
