@@ -219,12 +219,32 @@ func (page *MemPage) insert(bpTree *BPlusTree, data interface{}) (bool, *MemPage
       } else {
         //key, newpg :=split(pg)
         newpg := bpTree.NewPage()
+        newHdr := bpTree.pPager.Fetch(page.pgno)
+        newPgbuf := *(*[]byte)(unsafe.Pointer(pgHdr.pBulk))
+
+        of1 := uint16(unsafe.Sizeof(*&MemPage{}))
+        of2 := of1 + uint16(unsafe.Sizeof(*&Cell{})) * (page.ncell/2)
+
+        plof2 := cellptr(page.ncell/2 + 1).Ptr
+        cpsize := plof2 - plof
+        // copy cell
+        copy(newPgbuf[of1:], pagebuf[of2:newHdr.pCache.szPage])
+        // copy payload
+        copy(newPgbuf[newHdr.pCache.szPage-cpsize:], pagebuf[plof:plof2])
         //update page info
         newpg.maxkey = page.maxkey
+        newpg.flag = INTERPAGE
+        newpg.ppgno = page.ppgno
+        newpg.ncell = page.ncell/2
+        newpg.nfree = newHdr.pCache.szPage - uint16(unsafe.Sizeof(*&PgHead{})) - uint16(unsafe.Sizeof(*&Cell{})) * newpg.ncell
 
         page.maxkey = page.cellptr(page.ncell/2).key
-        page.ncell = page.ncell/2
+        page.ncell = page.ncell - newpg.ncell
 
+        newHdr.WriteHeader(newpg.flag, newpg.ncell, newpg.nfree, newpg.pgno, newpg.ppgno, newpg.maxkey)
+        pgHdr.WriteHeader(page.flag, page.ncell, page.nfree, page.pgno, page.ppgno, page.maxkey)
+
+        fmt.Printf("free=%d len=%d cap=%d slice=%v\n",clof, len(newPgbuf),cap(newPgbuf),newPgbuf[0:1024])
         return false, newpg
       }
   }
